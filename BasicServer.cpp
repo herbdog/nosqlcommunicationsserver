@@ -196,10 +196,16 @@ void handle_get(http_request message) {
   }
 
   // GET specific entry: Partition == paths[1], Row == paths[2]
+  if ((paths.size() < 2) || (*paths != "*"))
+  {
+	message.reply(status_codes::BadRequest);
+	return;
+  }
   table_operation retrieve_operation {table_operation::retrieve_entity(paths[1], paths[2])};
   table_result retrieve_result {table.execute(retrieve_operation)};
   cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
-  if (retrieve_result.http_status_code() == status_codes::NotFound) {
+  if (retrieve_result.http_status_code() == status_codes::NotFound)
+  {
     message.reply(status_codes::NotFound);
     return;
   }
@@ -210,9 +216,13 @@ void handle_get(http_request message) {
   // If the entity has any properties, return them as JSON
   prop_vals_t values (get_properties(properties));
   if (values.size() > 0)
+  {
     message.reply(status_codes::OK, value::object(values));
+  }
   else
+  {
     message.reply(status_codes::OK);
+  }
 }
 
 /*
