@@ -196,10 +196,20 @@ void handle_get(http_request message) {
   }
 
   // GET specific entry: Partition == paths[1], Row == paths[2]
-  if ((paths.size() < 2) || (*paths != "*"))
+  if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
   {
 	message.reply(status_codes::BadRequest);
 	return;
+  }
+  if (paths.size() < 3)
+  {
+	  message.reply(status_codes::BadRequest);
+	  return;
+  }
+  if (paths[2] != "*")
+  {
+	  message.reply(status_codes::NotFound);
+	  return;
   }
   table_operation retrieve_operation {table_operation::retrieve_entity(paths[1], paths[2])};
   table_result retrieve_result {table.execute(retrieve_operation)};
@@ -215,9 +225,15 @@ void handle_get(http_request message) {
   
   // If the entity has any properties, return them as JSON
   prop_vals_t values (get_properties(properties));
+  vector<pair<string,value>> entityvals 
+  {
+	  make_pair("Partition", value::string(paths[1])),
+	  make_pair("Row", value::string(paths[2]))
+  };
+  entityvals.insert(entityvals.end(), values.begin(), values.end());
   if (values.size() > 0)
   {
-    message.reply(status_codes::OK, value::object(values));
+    message.reply(status_codes::OK, value::object(entityvals));
   }
   else
   {

@@ -166,7 +166,7 @@ SUITE(GET) {
     static constexpr const char* addr {"http://127.0.0.1:34568/"};
     static constexpr const char* table {"TestTable"};
     static constexpr const char* partition {"Franklin,Aretha"};
-    static constexpr const char* row {"USA"};
+    static constexpr const char* row {"Enhancers"};
     static constexpr const char* property {"Song"};
     static constexpr const char* prop_val {"RESPECT"};
 
@@ -225,6 +225,7 @@ SUITE(GET) {
 		  + "\"}",
 		  result.second.serialize());
       CHECK_EQUAL(status_codes::OK, result.first);
+	  std::cout << "got entity values properly" << endl;
     }
 
   /*
