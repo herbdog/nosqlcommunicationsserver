@@ -173,20 +173,22 @@ SUITE(GET) {
   public:
     GetFixture() {
       int make_result {create_table(addr, table)};
-      cerr << "create result " << make_result << endl;
-      if (make_result != status_codes::Created && make_result != status_codes::Accepted) {
-	throw std::exception();
-      }
+         cerr << "create result " << make_result << endl;
+         if (make_result != status_codes::Created && make_result != status_codes::Accepted) {
+   	      throw std::exception();
+         }
+
       int put_result {put_entity (addr, table, partition, row, property, prop_val)};
-      cerr << "put result " << put_result << endl;
-      if (put_result != status_codes::OK) {
-	throw std::exception();
+         cerr << "put result " << put_result << endl;
+         if (put_result != status_codes::OK) {
+   	      throw std::exception();
+         }
+      
       }
-    }
     ~GetFixture() {
       int del_ent_result {delete_entity (addr, table, partition, row)};
       if (del_ent_result != status_codes::OK) {
-	throw std::exception();
+	      throw std::exception();
       }
 
       /*
@@ -207,57 +209,115 @@ SUITE(GET) {
     }
   };
 
-  /*
-    A test of GET of a single entity
+   /*
+      A test of GET of a single entity
    */
-  TEST_FIXTURE(GetFixture, GetSingle) {
-    pair<status_code,value> result {
-      do_request (methods::GET,
-		  string(GetFixture::addr)
-		  + GetFixture::table + "/"
-		  + GetFixture::partition + "/"
-		  + GetFixture::row)};
-      
-      CHECK_EQUAL(string("{\"")
-		  + GetFixture::property
-		  + "\":\""
-		  + GetFixture::prop_val
-		  + "\"}",
-		  result.second.serialize());
-      CHECK_EQUAL(status_codes::OK, result.first);
-    }
+   TEST_FIXTURE(GetFixture, GetSingle) {
+      cout << ">> GetSingle test" << endl;
+      pair<status_code,value> result {
+         do_request (methods::GET,
+		    string(GetFixture::addr)
+		    + GetFixture::table + "/"
+		    + GetFixture::partition + "/"
+		    + GetFixture::row)
+      };
 
-  /*
-    A test of GET all table entries
-   */
-  TEST_FIXTURE(GetFixture, GetAll) {
-    string partition {"Katherines,The"};
-    string row {"Canada"};
-    string property {"Home"};
-    string prop_val {"Vancouver"};
-    int put_result {put_entity (GetFixture::addr, GetFixture::table, partition, row, property, prop_val)};
-    cerr << "put result " << put_result << endl;
-    assert (put_result == status_codes::OK);
-
-    pair<status_code,value> result {
-      do_request (methods::GET,
-		  string(GetFixture::addr)
-		  + string(GetFixture::table))};
-    CHECK(result.second.is_array());
-    CHECK_EQUAL(2, result.second.as_array().size());
-    /*
-      Checking the body is not well-supported by UnitTest++, as we have to test
-      independent of the order of returned values.
-     */
-    //CHECK_EQUAL(body.serialize(), string("{\"")+string(GetFixture::property)+ "\":\""+string(GetFixture::prop_val)+"\"}");
-    CHECK_EQUAL(status_codes::OK, result.first);
-    CHECK_EQUAL(status_codes::OK, delete_entity (GetFixture::addr, GetFixture::table, partition, row));
+   //Formatting changed to fit
+   CHECK_EQUAL(string("{\"")
+      + "Partition" + "\":\""
+      + GetFixture::partition + "\",\""
+      + "Row" + "\":\""
+      + GetFixture::row + "\",\""
+	   + GetFixture::property + "\":\"" 
+      + GetFixture::prop_val + "\"" 
+      + "}",  
+      result.second.serialize());
+   CHECK_EQUAL(status_codes::OK, result.first);
   }
+
+   /*
+      A test of GET of an entity with table name, partition name, with row name as '*'
+   */
+   TEST_FIXTURE(GetFixture, GetPartition) {
+      cout << ">> GetPartition test" << endl;
+
+      string partition {"Franklin,Aretha"};
+      string row {"CAN"};
+      string property {"Song"};
+      string prop_val {"Disrespect"};
+      int put_result {put_entity (GetFixture::addr, GetFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      pair<status_code, value> result {
+         do_request (methods::GET, 
+            string(GetFixture::addr)
+            + GetFixture::table + "/"
+            + GetFixture::partition + "/"
+            + "*")
+      };
+   
+      
+      CHECK_EQUAL(string("[{\"")
+         + "Partition" + "\":\""
+         + GetFixture::partition + "\",\""
+         + "Row" + "\":\""
+         + "CAN" + "\",\""
+         + GetFixture::property + "\":\"" 
+         + "Disrespect" + "\"" 
+         + "},{\""
+         + "Partition" + "\":\""
+         + GetFixture::partition + "\",\""
+         + "Row" + "\":\""
+         + GetFixture::row + "\",\""
+         + GetFixture::property + "\":\"" 
+         + "RESPECT" + "\""
+         + "}]",
+         result.second.serialize());
+      
+
+      //CHECK_EQUAL(2, result.second.as_array().size());
+      CHECK_EQUAL(status_codes::OK, result.first);
+   }
+
+   /*
+      A test of GET all table entries
+   */
+   TEST_FIXTURE(GetFixture, GetAll) {
+      cout << ">> GetAll test" << endl;
+
+      string partition {"Katherines,The"};
+      string row {"Canada"};
+      string property {"Home"};
+      string prop_val {"Vancouver"};
+      int put_result {put_entity (GetFixture::addr, GetFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      pair<status_code,value> result {
+         do_request (methods::GET,
+		   string(GetFixture::addr)
+		   + string(GetFixture::table))
+      };
+      
+      CHECK(result.second.is_array());
+      //cout << result.second << endl;
+      //cout << result.second.serialize() << endl;
+      CHECK_EQUAL(3, result.second.as_array().size());
+      /*
+         Checking the body is not well-supported by UnitTest++, as we have to test
+         independent of the order of returned values.
+      */
+      //CHECK_EQUAL(body.serialize(), string("{\"")+string(GetFixture::property)+ "\":\""+string(GetFixture::prop_val)+"\"}");
+      CHECK_EQUAL(status_codes::OK, result.first);
+      CHECK_EQUAL(status_codes::OK, delete_entity (GetFixture::addr, GetFixture::table, partition, row));
+   }
+
 }
 
 /*
   Locate and run all tests
  */
 int main(int argc, const char* argv[]) {
-  return UnitTest::RunAllTests();
+   return UnitTest::RunAllTests();
 }
