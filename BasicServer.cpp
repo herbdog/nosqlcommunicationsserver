@@ -160,7 +160,10 @@ unordered_map<string,string> get_json_body(http_request message) {
   GET is the only request that has no command. All
   operands specify the value(s) to be retrieved.
  */
-void handle_get(http_request message) { 
+void handle_get(http_request message) {
+
+  unordered_map<string,string> json_body {get_json_body(message)};
+
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** GET " << path << endl;
   auto paths = uri::split_path(path);
@@ -175,6 +178,7 @@ void handle_get(http_request message) {
     message.reply(status_codes::NotFound);
     return;
   }
+ 
 
   // GET all entries in table
   if (paths.size() == 1) {
@@ -182,17 +186,82 @@ void handle_get(http_request message) {
     table_query_iterator end;
     table_query_iterator it = table.execute_query(query);
     vector<value> key_vec;
-    while (it != end) {
-      cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
-      prop_vals_t keys {
-	make_pair("Partition",value::string(it->partition_key())),
-	make_pair("Row", value::string(it->row_key()))};
-      keys = get_properties(it->properties(), keys);
-      key_vec.push_back(value::object(keys));
-      ++it;
-    }
-    message.reply(status_codes::OK, value::array(key_vec));
-    return;
+
+    if (json_body.size() == 0) {
+    	cout << "**** No JSON body found" << endl;
+	    while (it != end) {
+	      cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
+	      
+	      prop_vals_t keys {
+	      	make_pair("Partition",value::string(it->partition_key())),
+	      	make_pair("Row", value::string(it->row_key()))
+	      };
+	      
+	      keys = get_properties(it->properties(), keys);
+
+		  /*cout << std::get<0>(keys[2]) << endl;      
+		  cout << value::object(keys) << endl;
+	      cout << it->partition_key() << endl;
+	      cout << keys.size() << endl;*/
+
+	      key_vec.push_back(value::object(keys));
+	      ++it;
+	    }
+	    message.reply(status_codes::OK, value::array(key_vec));
+	    return;
+	}
+	else if (json_body.size() > 0) {
+		cout << "**** JSON Body found" << endl;
+
+		bool entityExists = false;
+		while (it != end) {
+			int count = 0;
+			bool outputKey = false;
+			for(const auto& n : json_body) {
+			    
+			    prop_vals_t keys {
+				    make_pair("Partition",value::string(it->partition_key())),
+				    make_pair("Row", value::string(it->row_key()))
+				};
+			    
+			    keys = get_properties(it->properties(), keys);
+			    //cout << value::object(keys) << endl;
+			    //cout << it->partition_key() << endl;
+			    
+			    for (int i = 2; i < keys.size(); i = i + 2) {
+			    	///cout << "for loop" << endl;
+			    	//cout << n.first << "    " << std::get<0>(keys[i]) << endl;
+				    if (n.first == std::get<0>(keys[i])) {
+				    	//cout << "if statement" << endl;
+				    	count++;
+				    	if (!outputKey) {
+				    		cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
+				    		outputKey = true;
+				    	}
+					}
+				}
+				//cout << count << "          " << keys.size() << endl;
+				if(count == keys.size() - 2) {
+					key_vec.push_back(value::object(keys));
+					entityExists = true;
+				}
+	    	}
+		++it;
+
+		}
+		if (entityExists) {
+	    	message.reply(status_codes::OK, value::array(key_vec));
+	    	return;
+		}
+		else {
+			message.reply(status_codes::BadRequest);
+		}
+	}
+	
+  }
+  else if (paths.size() == 0) {
+  	message.reply(status_codes::BadRequest);
+  	return;
   }
 
   // GET specific entry: Partition == paths[1], Row == paths[2]
@@ -206,12 +275,40 @@ void handle_get(http_request message) {
 	  message.reply(status_codes::BadRequest);
 	  return;
   }
-  if (paths[2] != "*")
+  
+  if (paths[2] == "*")
   {
-	  message.reply(status_codes::NotFound);
-	  return;
+	  table_query query2 {};
+	  query2.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[1])));
+	  table_query_iterator it = table.execute_query(query2);
+	  table_query_iterator end;
+	  vector<value> values2_vec {};
+  	  bool partition_exists = false;
+	  while (it != end) {
+	  
+	  	  if (it->partition_key() == paths[1]) {
+		  	  partition_exists = true;
+			  prop_vals_t values2 
+			  {
+				  make_pair("Partition", value::string(it->partition_key())),
+				  make_pair("Row", value::string(it->row_key()))
+			  };
+			  values2 = get_properties(it->properties(), values2);
+			  values2_vec.push_back(value::object(values2));
+			  ++it;
+		  }
+	  }
+	  if (partition_exists) {
+		  message.reply(status_codes::OK, value::array(values2_vec));
+		  return;
+	  }
+	  else {
+	  	message.reply(status_codes::BadRequest);
+	  	return;
+	  }
   }
-  table_operation retrieve_operation {table_operation::retrieve_entity(paths[1], paths[2])};
+  
+  table_operation retrieve_operation {table_operation::retrieve_entity(paths[1],paths[2])};
   table_result retrieve_result {table.execute(retrieve_operation)};
   cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
   if (retrieve_result.http_status_code() == status_codes::NotFound)
