@@ -166,7 +166,7 @@ SUITE(GET) {
     static constexpr const char* addr {"http://127.0.0.1:34568/"};
     static constexpr const char* table {"TestTable"};
     static constexpr const char* partition {"Franklin,Aretha"};
-    static constexpr const char* row {"Enhancers"};
+    static constexpr const char* row {"USA"};
     static constexpr const char* property {"Song"};
     static constexpr const char* prop_val {"RESPECT"};
 
@@ -286,7 +286,6 @@ SUITE(GET) {
 
       //CHECK_EQUAL(2, result.second.as_array().size());
       CHECK_EQUAL(status_codes::OK, result.first);
-<<<<<<< HEAD
       CHECK_EQUAL(status_codes::OK, delete_entity (GetFixture::addr, GetFixture::table, partition, row));
       CHECK_EQUAL(status_codes::OK, delete_entity (GetFixture::addr, GetFixture::table, partition2, row2));
 
@@ -375,10 +374,6 @@ SUITE(GET) {
 
       CHECK_EQUAL(status_codes::OK, delete_entity (GetFixture::addr, GetFixture::table, partition, row));
    }
-=======
-	  std::cout << "got entity values properly" << endl;
-    }
->>>>>>> 4e95004199e25dc171b87fdd01b933a5effdde68
 
     /*
       A test of Get JSON properties

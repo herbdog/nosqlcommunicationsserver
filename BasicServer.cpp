@@ -275,7 +275,6 @@ void handle_get(http_request message) {
 	  message.reply(status_codes::BadRequest);
 	  return;
   }
-<<<<<<< HEAD
   
   if (paths[2] == "*")
   {
@@ -310,14 +309,6 @@ void handle_get(http_request message) {
   }
   
   table_operation retrieve_operation {table_operation::retrieve_entity(paths[1],paths[2])};
-=======
-  if (paths[2] != "*")
-  {
-	  message.reply(status_codes::NotFound);
-	  return;
-  }
-  table_operation retrieve_operation {table_operation::retrieve_entity(paths[1], paths[2])};
->>>>>>> 4e95004199e25dc171b87fdd01b933a5effdde68
   table_result retrieve_result {table.execute(retrieve_operation)};
   cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
   if (retrieve_result.http_status_code() == status_codes::NotFound)
