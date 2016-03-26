@@ -20,8 +20,8 @@
 #include <was/storage_account.h>
 #include <was/table.h>
 
+#include "ServerUtils.h"
 #include "TableCache.h"
-#include "config.h"
 #include "make_unique.h"
 
 #include "azure_keys.h"
@@ -71,10 +71,7 @@ const string delete_table {"DeleteTable"};
 const string update_entity {"UpdateEntity"};
 const string delete_entity {"DeleteEntity"};
 
-/*
-  Cache of opened tables
- */
-TableCache table_cache {storage_connection_string};
+//Cache of open tables is no longer required, so it is deleted
 
 /*
   Convert properties represented in Azure Storage type
