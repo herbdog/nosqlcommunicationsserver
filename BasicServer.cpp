@@ -66,10 +66,13 @@ using prop_vals_t = vector<pair<string,value>>;
 
 constexpr const char* def_url = "http://localhost:34568";
 
-const string create_table {"CreateTable"};
-const string delete_table {"DeleteTable"};
-const string update_entity {"UpdateEntity"};
-const string delete_entity {"DeleteEntity"};
+const string create_table {"CreateTableAdmin"};
+const string delete_table {"DeleteTableAdmin"};
+const string update_entity {"UpdateEntityAdmin"};
+const string delete_entity {"DeleteEntityAdmin"};
+// Not implemented, catches and does nothing
+const string add_property {"AddPropertyAdmin"};
+const string update_property {"UpdatePropertyAdmin"};
 
 //Cache of open tables is no longer required, so it is deleted
 
@@ -387,6 +390,12 @@ void handle_put(http_request message) {
 
   table_entity entity {paths[2], paths[3]};
 
+  // Admin property things that weren't implemented
+  if (paths[0] == add_property || paths[0] == update_property)
+  {
+      message.reply(status_codes::NotImplemented);
+  }
+
   // Update entity
   if (paths[0] == update_entity) {
     cout << "Update " << entity.partition_key() << " / " << entity.row_key() << endl;
@@ -455,6 +464,7 @@ void handle_delete(http_request message) {
     message.reply(status_codes::BadRequest);
   }
 }
+
 
 /*
   Main server routine
