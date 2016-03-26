@@ -74,7 +74,7 @@ const string delete_entity {"DeleteEntityAdmin"};
 const string add_property {"AddPropertyAdmin"};
 const string update_property {"UpdatePropertyAdmin"};
 
-//Cache of open tables is no longer required, so it is deleted
+TableCache table_cache{};
 
 /*
   Convert properties represented in Azure Storage type
