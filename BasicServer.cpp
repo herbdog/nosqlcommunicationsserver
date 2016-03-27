@@ -20,7 +20,7 @@
 #include <was/storage_account.h>
 #include <was/table.h>
 
-#include "ServerUtils.h"
+#include "ServerUtils.cpp"
 #include "TableCache.h"
 #include "make_unique.h"
 
@@ -73,8 +73,12 @@ const string delete_entity {"DeleteEntityAdmin"};
 // Not implemented, catches and does nothing
 const string add_property {"AddPropertyAdmin"};
 const string update_property {"UpdatePropertyAdmin"};
+const string read_auth {"ReadEntityAuth";}
+const string update_auth {"UpdateEntityAuth"};
+
 
 //Cache of open tables is no longer required, so it is deleted
+TableCache table_cache {};
 
 /*
   Convert properties represented in Azure Storage type
@@ -167,6 +171,19 @@ void handle_get(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** GET " << path << endl;
   auto paths = uri::split_path(path);
+
+  // Read entity with authorization, return status code OK,
+  // and return entity to be read in JSON array
+
+  vector<value> auth_vec;
+
+  if (paths[0] == read_auth && 
+    std::get<0>(read_with_token(message, tables_endpoint)) == status::OK)
+  {
+    auth_vec.push_back(tables_endpoint);
+    message.reply(status_codes::OK, value::array(auth_vec);
+  }
+
   // Need at least a table name
   if (paths.size() < 1) {
     message.reply(status_codes::BadRequest);
@@ -376,6 +393,10 @@ void handle_put(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** PUT " << path << endl;
   auto paths = uri::split_path(path);
+
+  vector<value> update_vec;
+  unordered_map<string,string> json_body {get_json_body(message)};
+
   // Need at least an operation, table name, partition, and row
   if (paths.size() < 4) {
     message.reply(status_codes::BadRequest);
@@ -396,21 +417,45 @@ void handle_put(http_request message) {
       message.reply(status_codes::NotImplemented);
   }
 
-  // Update entity
-  if (paths[0] == update_entity) {
-    cout << "Update " << entity.partition_key() << " / " << entity.row_key() << endl;
-    table_entity::properties_type& properties = entity.properties();
-    for (const auto v : get_json_body(message)) {
-      properties[v.first] = entity_property {v.second};
+
+
+  if (update_with_token(message, tables_endpoint, get_json_body(message)) == status::OK)
+  {
+    // Update entity
+    if (paths[0] == update_entity) 
+    {
+      cout << "Update " << entity.partition_key() << " / " << entity.row_key() << endl;
+      table_entity::properties_type& properties = entity.properties();
+
+      for (const auto v : json_body) 
+      {
+        properties[v.first] = entity_property {v.second};
+      }
+
+      try
+      {
+          table_operation operation {table_operation::insert_or_merge_entity(entity)};
+          table_result op_result {table.execute(operation)};
+
+          message.reply(status_codes::OK);
+      }
     }
 
-    table_operation operation {table_operation::insert_or_merge_entity(entity)};
-    table_result op_result {table.execute(operation)};
+    catch (const storage_exception& e) 
+    {
+      cout << "Azure Table Storage error: " << e.what() << endl;
+      cout << e.result().extended_error().message() << endl;
+      
+      if (e.result().http_status_code() == status_codes::Forbidden)
+        message.reply(status_codes::Forbidden);
+      else
+        message.reply(status_codes::InternalError);
+    }
 
-    message.reply(status_codes::OK);
-  }
-  else {
-    message.reply(status_codes::BadRequest);
+    else 
+    {
+      message.reply(status_codes::BadRequest);
+    }
   }
 }
 
