@@ -16,6 +16,12 @@
 
 #include <UnitTest++/UnitTest++.h>
 
+#include "ServerUtils.h"
+#include "TableCache.h"
+#include "make_unique.h"
+
+#include "azure_keys.h"
+
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -37,6 +43,8 @@ using web::http::client::http_client;
 
 using web::json::object;
 using web::json::value;
+
+using azure::storage::storage_exception;
 
 const string create_table_op {"CreateTableAdmin"};
 const string delete_table_op {"DeleteTableAdmin"};
@@ -188,8 +196,10 @@ bool compare_json_arrays(const vector<object>& exp, const value& actual) {
     if it is not met.
   */
   auto comp = [] (const object& a, const object& b) -> bool {
-    return a.at("Partition").as_string() <= b.at("Partition").as_string() &&
-           a.at("Row").as_string()       <= b.at("Row").as_string(); 
+    return a.at("Partition").as_string()  <  b.at("Partition").as_string()
+       ||
+       (a.at("Partition").as_string() == b.at("Partition").as_string() &&
+        a.at("Row").as_string()       <  b.at("Row").as_string()); 
   };
   if ( ! std::is_sorted(exp.begin(),
                          exp.end(),
@@ -504,14 +514,14 @@ SUITE(GET) {
          + "Row" + "\":\""
          + BasicFixture::row + "\",\""
          + BasicFixture::property + "\":\"" 
-         + "RESPECT" + "\"" 
+         + BasicFixture::prop_val + "\"" 
          + "},{\""
          + "Partition" + "\":\""
          + BasicFixture::partition + "\",\""
          + "Row" + "\":\""
-         + "John,Doe" + "\",\""
-         + BasicFixture::property + "\":\"" 
-         + "DISRESPECT" + "\""
+         + row + "\",\""
+         + property + "\":\"" 
+         + prop_val + "\""
          + "}]",
          result.second.serialize());
       
@@ -641,18 +651,18 @@ SUITE(GET) {
       CHECK_EQUAL(2, result.second.as_array().size());
       CHECK_EQUAL(string("[{\"")
          + "Partition" + "\":\""
-         + "CAN" + "\",\""
+         + partition + "\",\""
          + "Row" + "\":\""
-         + BasicFixture::row + "\",\""
-         + BasicFixture::property + "\":\"" 
-         + "DISRESPECT" + "\"" 
+         + row + "\",\""
+         + property + "\":\"" 
+         + prop_val + "\"" 
          + "},{\""
          + "Partition" + "\":\""
          + BasicFixture::partition + "\",\""
          + "Row" + "\":\""
          + BasicFixture::row + "\",\""
          + BasicFixture::property + "\":\"" 
-         + "RESPECT" + "\""
+         + BasicFixture::prop_val + "\""
          + "}]",
          result.second.serialize());
 
@@ -788,16 +798,22 @@ public:
 
 SUITE(UPDATE_AUTH) {
   TEST_FIXTURE(AuthFixture,  PutAuth) {
+    cout << ">> PutAuth Test" << endl;
+
     pair<string,string> added_prop {make_pair(string("born"),string("1942"))};
 
     cout << "Requesting token" << endl;
     pair<status_code,string> token_res {
       get_update_token(AuthFixture::auth_addr,
                        AuthFixture::userid,
-                       AuthFixture::user_pwd)};
+                       AuthFixture::user_pwd)
+    };
+
     cout << "Token response " << token_res.first << endl;
+    cout << token_res.second << endl;
     CHECK_EQUAL (token_res.first, status_codes::OK);
     
+    //read_entity_auth is the token for reading
     pair<status_code,value> result {
       do_request (methods::PUT,
                   string(AuthFixture::addr)
@@ -809,7 +825,8 @@ SUITE(UPDATE_AUTH) {
                   value::object (vector<pair<string,value>>
                                    {make_pair(added_prop.first,
                                               value::string(added_prop.second))})
-                  )};
+                  )
+    };
     CHECK_EQUAL(status_codes::OK, result.first);
     
     pair<status_code,value> ret_res {
@@ -818,18 +835,116 @@ SUITE(UPDATE_AUTH) {
                   + read_entity_admin + "/"
                   + AuthFixture::table + "/"
                   + AuthFixture::partition + "/"
-                  + AuthFixture::row)};
+                  + AuthFixture::row)
+    };
     CHECK_EQUAL (status_codes::OK, ret_res.first);
+
     value expect {
       build_json_object (
                          vector<pair<string,string>> {
                            added_prop,
                            make_pair(string(AuthFixture::property), 
                                      string(AuthFixture::prop_val))}
-                         )};
+                         )
+    };
                              
     cout << AuthFixture::property << endl;
     compare_json_values (expect, ret_res.second);
+
+    //Less than four parameters
+    cout << "Edge PUT_AUTH  1" << endl;
+    pair<status_code,value> result2 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second,
+                  value::object (vector<pair<string,value>> 
+                    {make_pair(added_prop.first, 
+                    value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result2.first);
+
+    //Token for reading
+    cout << "Edge PUT_AUTH 2" << endl;
+    try {
+      pair<status_code,value> result3 {
+        do_request (methods::PUT,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row,
+                      value::object (vector<pair<string,value>>
+                        {make_pair(added_prop.first,
+                        value::string(added_prop.second))})
+                    )
+      };
+      cout << "No exception thrown: Exception expected" << endl;
+    }
+    catch (const storage_exception& e) {
+      cout << "Azure Table Storage error: " << e.what() << endl;
+      cout << e.result().extended_error().message() << endl;
+      if (e.result().http_status_code() == status_codes::Forbidden) 
+        cout << "Exception: " << status_codes::Forbidden << endl;
+      else
+        cout << "Exception: " << status_codes::InternalError << endl;
+    }
+
+    //Token does not authorize access
+    cout << "Edge PUT_AUTH 3" << endl;
+    pair<status_code,value> result4 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_admin + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result4.first);
+
+    //Table was not found
+    cout << "Edge PUT_AUTH 4" << endl;
+    pair<status_code,value> result5 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + "NotATable" + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
+
+    //No entity with partition and row name
+    cout << "Edge PUT_AUTH 5" << endl;
+    pair<status_code,value> result6 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + "Bob" + "/"
+                  + "Jenkins",
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result6.first);
+
+
   }
 }
 
