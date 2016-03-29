@@ -16,6 +16,12 @@
 
 #include <UnitTest++/UnitTest++.h>
 
+#include "ServerUtils.h"
+#include "TableCache.h"
+#include "make_unique.h"
+
+#include "azure_keys.h"
+
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -37,6 +43,8 @@ using web::http::client::http_client;
 
 using web::json::object;
 using web::json::value;
+
+using azure::storage::storage_exception;
 
 const string create_table_op {"CreateTableAdmin"};
 const string delete_table_op {"DeleteTableAdmin"};
@@ -188,8 +196,10 @@ bool compare_json_arrays(const vector<object>& exp, const value& actual) {
     if it is not met.
   */
   auto comp = [] (const object& a, const object& b) -> bool {
-    return a.at("Partition").as_string() <= b.at("Partition").as_string() &&
-           a.at("Row").as_string()       <= b.at("Row").as_string(); 
+    return a.at("Partition").as_string()  <  b.at("Partition").as_string()
+       ||
+       (a.at("Partition").as_string() == b.at("Partition").as_string() &&
+        a.at("Row").as_string()       <  b.at("Row").as_string()); 
   };
   if ( ! std::is_sorted(exp.begin(),
                          exp.end(),
@@ -292,7 +302,7 @@ int put_entity(const string& addr, const string& table, const string& partition,
               const vector<pair<string,value>>& props) {
   pair<status_code,value> result {
     do_request (methods::PUT,
-               addr + "UpdateEntity/" + table + "/" + partition + "/" + row,
+               addr + update_entity_admin + "/" + table + "/" + partition + "/" + row,
                value::object (props))};
   return result.first;
 }
@@ -324,10 +334,32 @@ pair<status_code,string> get_update_token(const string& addr,  const string& use
                                               get_update_token_op + "/" +
                                               userid,
                                               pwd
-                                              )};
+                                              )
+  };
   cerr << "token " << result.second << endl;
-  if (result.first != status_codes::OK)
+  if (result.first != status_codes::OK) {
     return make_pair (result.first, "");
+  }
+  else {
+    string token {result.second.as_string()};
+    return make_pair (result.first, token);
+  }
+}
+
+pair<status_code,string> get_read_token(const string& addr,  const string& userid, const string& password) {
+  value pwd {build_json_object (vector<pair<string,string>> {make_pair("Password", password)})};
+  pair<status_code,value> result {do_request (methods::GET,
+                                              addr +
+                                              get_read_token_op + "/" +
+                                              userid,
+                                              pwd
+                                              )
+  };
+  cerr << "token " << result.second << endl;
+  cout << result.first << endl;
+  if (result.first != status_codes::OK) {
+    return make_pair (result.first, "");
+  }
   else {
     string token {result.second["token"].as_string()};
     return make_pair (result.first, token);
@@ -397,7 +429,9 @@ SUITE(GET) {
     Demonstrates use of new compare_json_arrays() function.
    */
   TEST_FIXTURE(BasicFixture, GetAll) {
-    string partition {"Canada"};
+    cout << ">> GetAll (assign2) Test" << endl;
+
+    string partition {"CAN"};
     string row {"Katherines,The"};
     string property {"Home"};
     string prop_val {"Vancouver"};
@@ -409,8 +443,11 @@ SUITE(GET) {
       do_request (methods::GET,
                   string(BasicFixture::addr)
                   + read_entity_admin + "/"
-                  + string(BasicFixture::table))};
+                  + string(BasicFixture::table))
+    };
+
     CHECK_EQUAL(status_codes::OK, result.first);
+
     value obj1 {
       value::object(vector<pair<string,value>> {
           make_pair(string("Partition"), value::string(partition)),
@@ -418,6 +455,7 @@ SUITE(GET) {
           make_pair(property, value::string(prop_val))
       })
     };
+
     value obj2 {
       value::object(vector<pair<string,value>> {
           make_pair(string("Partition"), value::string(BasicFixture::partition)),
@@ -425,13 +463,327 @@ SUITE(GET) {
           make_pair(string(BasicFixture::property), value::string(BasicFixture::prop_val))
       })
     };
+
     vector<object> exp {
       obj1.as_object(),
       obj2.as_object()
     };
+
     compare_json_arrays(exp, result.second);
     CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
   }
+
+   /*
+      A test of GET of a single entity
+   */
+   TEST_FIXTURE(BasicFixture, GetSingle) {
+      cout << ">> GetSingle test" << endl;
+      pair<status_code,value> result {
+         do_request (methods::GET,
+        string(BasicFixture::addr)
+        + read_entity_admin + "/"
+        + BasicFixture::table + "/"
+        + BasicFixture::partition + "/"
+        + BasicFixture::row)
+      };
+
+   //Formatting changed to fit
+   CHECK_EQUAL(string("{\"")
+ /*     + "Partition" + "\":\""
+      + BasicFixture::partition + "\",\""
+      + "Row" + "\":\""
+      + BasicFixture::row + "\",\""    */
+     + BasicFixture::property + "\":\"" 
+      + BasicFixture::prop_val + "\"" 
+      + "}",  
+      result.second.serialize());
+   CHECK_EQUAL(status_codes::OK, result.first);
+  }
+
+   /*
+      A test of GET of an entity with table name, partition name, with row name as '*'
+   */
+   TEST_FIXTURE(BasicFixture, GetPartition) {
+      cout << ">> GetPartition test" << endl;
+
+      string partition {"USA"};
+      string row {"John,Doe"};
+      string property {"Song"};
+      string prop_val {"DISRESPECT"};
+      int put_result {put_entity (BasicFixture::addr, BasicFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      string partition2 {"CAN"};
+      string row2 {"Katherines,The"};
+      string property2 {"Home"};
+      string prop_val2 {"Vancouver"};
+      int put_result2 {put_entity (BasicFixture::addr, BasicFixture::table, partition2, row2, property2, prop_val2)};
+      cerr << "put result " << put_result2 << endl;
+      assert (put_result2 == status_codes::OK);
+
+      pair<status_code, value> result {
+         do_request (methods::GET, 
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table + "/"
+            + BasicFixture::partition + "/"
+            + "*")
+      };
+   
+      
+      CHECK_EQUAL(string("[{\"")
+         /*+ "Partition" + "\":\""
+         + BasicFixture::partition + "\",\""
+         + "Row" + "\":\""
+         + BasicFixture::row + "\",\""*/
+         + BasicFixture::property + "\":\"" 
+         + BasicFixture::prop_val + "\"" 
+         + "},{\""
+         /*+ "Partition" + "\":\""
+         + BasicFixture::partition + "\",\""
+         + "Row" + "\":\""
+         + row + "\",\""*/
+         + property + "\":\"" 
+         + prop_val + "\""
+         + "}]",
+         result.second.serialize());
+      
+
+      //CHECK_EQUAL(2, result.second.as_array().size());
+      CHECK_EQUAL(status_codes::OK, result.first);
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition2, row2));
+
+   }
+
+   TEST_FIXTURE(BasicFixture, EdgeCases) {
+      cout << ">> EdgeCases test" << endl;
+
+      string partition {"CAN"};
+      string row {"Franklin,Aretha"};
+      string property {"Song"};
+      string prop_val {"DISRESPECT"};
+      int put_result {put_entity (BasicFixture::addr, BasicFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      //Partition does not exist
+      cout << "Edge Partition 1" << endl;
+      pair<status_code, value> result {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table + "/"
+            + "NotA,Partition" + "/"
+            + "*")
+      };
+      CHECK_EQUAL(status_codes::BadRequest, result.first);
+
+      //Row does not exist/is not '*'
+      cout << "Edge Partition 2" << endl;
+      pair<status_code, value> result2 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table + "/"
+            + BasicFixture::partition + "/"
+            + "NotA,Row")
+      };
+      CHECK_EQUAL(status_codes::NotFound, result2.first);
+
+      //Table does not exist
+      cout << "Edge Partition 3" << endl;
+      pair<status_code, value> result3 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + "NotATable" + "/"
+            + BasicFixture::partition + "/"
+            + BasicFixture::row)
+      };
+      CHECK_EQUAL(status_codes::NotFound, result3.first);
+
+      //No paths (Missing table, partition, row)
+      cout << "Edge Partition 4" << endl;
+      pair<status_code, value> result4 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin)
+      };
+      CHECK_EQUAL(status_codes::BadRequest, result4.first);
+
+      //Missing Partition
+      cout << "Edge Partition 5" << endl;
+      pair<status_code, value> result5 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table + "/"
+            + "/" + BasicFixture::row)
+      };
+      CHECK_EQUAL(status_codes::BadRequest, result5.first);
+
+      //Missing Row
+      cout << "Edge Partition 6" << endl;
+      pair<status_code, value> result6 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table + "/"
+            + BasicFixture::partition)
+      };
+      CHECK_EQUAL(status_codes::BadRequest, result6.first);
+
+      //Missing Row and Partition, with wrong Table name
+      cout << "Edge Partition 7" << endl;
+      pair<status_code, value> result7 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + "NotATable")
+      };
+      CHECK_EQUAL(status_codes::NotFound, result7.first);
+
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
+   }
+
+    /*
+      A test of Get JSON properties
+   */
+   TEST_FIXTURE(BasicFixture, GetJSON) {
+      cout << ">> GetJSON test" << endl;
+
+      string partition {"CAN"};
+      string row {"Franklin,Aretha"};
+      string property {"Song"};
+      string prop_val {"DISRESPECT"};
+      int put_result {put_entity (BasicFixture::addr, BasicFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      string partition2 {"CAN"};
+      string row2 {"Katherines,The"};
+      string property2 {"Home"};
+      string prop_val2 {"Vancouver"};
+      int put_result2 {put_entity (BasicFixture::addr, BasicFixture::table, partition2, row2, property2, prop_val2)};
+      cerr << "put result " << put_result2 << endl;
+      assert (put_result2 == status_codes::OK);
+
+
+      
+      pair<status_code, value> result {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table,
+            value::object (vector<pair<string,value>>
+                {make_pair("Song", value::string("Respect"))}))
+      };  
+      CHECK_EQUAL(2, result.second.as_array().size());
+      CHECK_EQUAL(string("[{\"")
+         + "Partition" + "\":\""
+         + partition + "\",\""
+         + "Row" + "\":\""
+         + row + "\",\""
+         + property + "\":\"" 
+         + prop_val + "\"" 
+         + "},{\""
+         + "Partition" + "\":\""
+         + BasicFixture::partition + "\",\""
+         + "Row" + "\":\""
+         + BasicFixture::row + "\",\""
+         + BasicFixture::property + "\":\"" 
+         + BasicFixture::prop_val + "\""
+         + "}]",
+         result.second.serialize());
+
+      //Property not found
+      cout << "Edge JSON 1" << endl;
+      pair<status_code, value> result2 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table,
+            value::object (vector<pair<string,value>>
+                {make_pair("NotASong", value::string("string"))}))
+      };     
+      CHECK_EQUAL(status_codes::BadRequest, result2.first);
+
+      //No Table value
+      cout << "Edge JSON 2" << endl;
+      pair<status_code, value> result3 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin,
+            value::object (vector<pair<string,value>>
+                {make_pair("NotASong", value::string("string"))}))
+      };
+      CHECK_EQUAL(status_codes::BadRequest, result3.first);
+
+      //Table not found
+      cout << "Edge JSON 3" << endl;
+      pair<status_code, value> result4 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + "NotA,Table",
+            value::object (vector<pair<string,value>>
+                {make_pair("Home", value::string("string"))}))
+      };
+      CHECK_EQUAL(status_codes::NotFound, result4.first);
+
+      //Random prop_val and different property (Katherine's)
+      cout << "Edge JSON 4" << endl;
+      pair<status_code, value> result5 {
+         do_request (methods::GET,
+            string(BasicFixture::addr)
+            + read_entity_admin + "/"
+            + BasicFixture::table,
+            value::object (vector<pair<string,value>>
+                {make_pair("Home", value::string("KAHD872f273f72kauhfsefKAHDA&Y*Y@#*uygQETR"))}))
+      };
+      CHECK_EQUAL(status_codes::OK, result5.first);
+      CHECK_EQUAL(1, result5.second.as_array().size());
+
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition2, row2));
+
+   }
+
+   /*
+      A test of GET all table entries
+   */
+   TEST_FIXTURE(BasicFixture, GetAllAssign1) {
+      cout << ">> GetAll (assign1) test" << endl;
+
+      string partition {"Katherines,The"};
+      string row {"Katherines,The"};
+      string property {"Home"};
+      string prop_val {"Vancouver"};
+      int put_result {put_entity (BasicFixture::addr, BasicFixture::table, partition, row, property, prop_val)};
+      cerr << "put result " << put_result << endl;
+      assert (put_result == status_codes::OK);
+
+      pair<status_code,value> result {
+         do_request (methods::GET,
+       string(BasicFixture::addr)
+       + read_entity_admin + "/"
+       + string(BasicFixture::table))
+      };
+      
+      CHECK(result.second.is_array());
+      //cout << result.second << endl;
+      //cout << result.second.serialize() << endl;
+      CHECK_EQUAL(2, result.second.as_array().size());
+      /*
+         Checking the body is not well-supported by UnitTest++, as we have to test
+         independent of the order of returned values.
+      */
+      //CHECK_EQUAL(body.serialize(), string("{\"")+string(BasicFixture::property)+ "\":\""+string(BasicFixture::prop_val)+"\"}");
+      CHECK_EQUAL(status_codes::OK, result.first);
+      CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
+   }
 }
 
 class AuthFixture {
@@ -461,13 +813,19 @@ public:
     if (put_result != status_codes::OK) {
       throw std::exception();
     }
+
+    vector<pair<string, value>> v {
+      make_pair("Password", value::string(user_pwd)),
+      make_pair("DataPartition", value::string(partition)),
+      make_pair("DataRow", value::string(row))
+    };
+
     // Ensure userid and password in system
     int user_result {put_entity (addr,
                                  auth_table,
                                  auth_table_partition,
                                  userid,
-                                 auth_pwd_prop,
-                                 user_pwd)};
+                                 v)};
     cerr << "user auth table insertion result " << user_result << endl;
     if (user_result != status_codes::OK)
       throw std::exception();
@@ -483,16 +841,20 @@ public:
 
 SUITE(UPDATE_AUTH) {
   TEST_FIXTURE(AuthFixture,  PutAuth) {
+    cout << ">> PutAuth Test" << endl;
+
     pair<string,string> added_prop {make_pair(string("born"),string("1942"))};
 
     cout << "Requesting token" << endl;
     pair<status_code,string> token_res {
       get_update_token(AuthFixture::auth_addr,
                        AuthFixture::userid,
-                       AuthFixture::user_pwd)};
+                       AuthFixture::user_pwd)
+    };
     cout << "Token response " << token_res.first << endl;
-    CHECK_EQUAL (token_res.first, status_codes::OK);
+    CHECK_EQUAL ( status_codes::OK, token_res.first);
     
+    //read_entity_auth is the token for reading
     pair<status_code,value> result {
       do_request (methods::PUT,
                   string(AuthFixture::addr)
@@ -504,7 +866,8 @@ SUITE(UPDATE_AUTH) {
                   value::object (vector<pair<string,value>>
                                    {make_pair(added_prop.first,
                                               value::string(added_prop.second))})
-                  )};
+                  )
+    };
     CHECK_EQUAL(status_codes::OK, result.first);
     
     pair<status_code,value> ret_res {
@@ -513,17 +876,155 @@ SUITE(UPDATE_AUTH) {
                   + read_entity_admin + "/"
                   + AuthFixture::table + "/"
                   + AuthFixture::partition + "/"
-                  + AuthFixture::row)};
+                  + AuthFixture::row)
+    };
     CHECK_EQUAL (status_codes::OK, ret_res.first);
-    value expect {
+
+
+    value expect1 {
       build_json_object (
-                         vector<pair<string,string>> {
-                           added_prop,
-                           make_pair(string(AuthFixture::property), 
-                                     string(AuthFixture::prop_val))}
-                         )};
+                          vector<pair<string,string>> {
+                            added_prop,
+                            make_pair(string(AuthFixture::property), 
+                                      string(AuthFixture::prop_val))
+                          }
+      )
+    };
+
+    cout << ret_res.second.serialize() << endl;
+    cout << expect1 << endl;
                              
-    cout << AuthFixture::property << endl;
-    compare_json_values (expect, ret_res.second);
+    compare_json_values (expect1, ret_res.second);
+
+    //Less than four parameters
+    cout << "Edge PUT_AUTH 1" << endl;
+    pair<status_code,value> result2 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second,
+                  value::object (vector<pair<string,value>> 
+                    {make_pair(added_prop.first, 
+                    value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result2.first);
+
+    //Token for reading
+    cout << "Edge PUT_AUTH 2" << endl;
+    try {
+      pair<status_code,value> result3 {
+        do_request (methods::PUT,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row,
+                      value::object (vector<pair<string,value>>
+                        {make_pair(added_prop.first,
+                        value::string(added_prop.second))})
+                    )
+      };
+      //cout << "No exception thrown: Exception expected" << endl;
+      CHECK_EQUAL(status_codes::Forbidden, result3.first);
+    }
+    catch (const storage_exception& e) {
+      cout << "Azure Table Storage error: " << e.what() << endl;
+      cout << e.result().extended_error().message() << endl;
+      if (e.result().http_status_code() == status_codes::Forbidden) 
+        cout << "Exception: " << status_codes::Forbidden << endl;
+      else
+        cout << "Exception: " << status_codes::InternalError << endl;
+    }
+
+    //Token does not authorize access
+    cout << "Edge PUT_AUTH 3" << endl;
+    pair<status_code,value> result4 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_admin + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result4.first);
+
+    //Table was not found
+    cout << "Edge PUT_AUTH 4" << endl;
+    pair<status_code,value> result5 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + "NotATable" + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
+
+    //No entity with partition and row name
+    cout << "Edge PUT_AUTH 5" << endl;
+    pair<status_code,value> result6 {
+      do_request (methods::PUT,
+                  string(AuthFixture::addr)
+                  + update_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + "Bob" + "/"
+                  + "Jenkins",
+                  value::object (vector<pair<string,value>>
+                                   {make_pair(added_prop.first,
+                                              value::string(added_prop.second))})
+                  )
+    };
+    CHECK_EQUAL(status_codes::Forbidden, result6.first);
+
+
   }
+
+/*  SUITE(GET_AUTH) {
+    TEST_FIXTURE(AuthFixture, GetAuth) {
+      cout << ">> GetAuth Test" << endl;
+
+      pair<string,string> added_prop {make_pair(string("born"),string("1942"))};
+
+      cout << "Requesting token" << endl;
+      pair<status_code,string> token_res {
+        get_read_token(AuthFixture::auth_addr,
+                         AuthFixture::userid,
+                         AuthFixture::user_pwd)
+      };
+
+      cout << "Token response " << token_res.first << endl;
+      cout << token_res.second << endl;
+      CHECK_EQUAL ( status_codes::OK, token_res.first);
+      
+      //read_entity_auth is the token for reading
+      pair<status_code,value> result {
+        do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row,
+                    value::object (vector<pair<string,value>>
+                                     {make_pair(added_prop.first,
+                                                value::string(added_prop.second))})
+                    )
+      };
+    }
+  }*/
 }
+

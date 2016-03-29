@@ -21,8 +21,8 @@
 #include <was/table.h>
 
 #include "TableCache.h"
-#include "config.h"
 #include "make_unique.h"
+#include "ServerUtils.h"
 
 #include "azure_keys.h"
 
@@ -66,10 +66,18 @@ using prop_vals_t = vector<pair<string,value>>;
 
 constexpr const char* def_url = "http://localhost:34568";
 
-const string create_table {"CreateTable"};
-const string delete_table {"DeleteTable"};
-const string update_entity {"UpdateEntity"};
-const string delete_entity {"DeleteEntity"};
+const string create_table {"CreateTableAdmin"};
+const string delete_table {"DeleteTableAdmin"};
+const string read_entity {"ReadEntityAdmin"};
+const string update_entity {"UpdateEntityAdmin"};
+const string delete_entity {"DeleteEntityAdmin"};
+
+const string read_auth {"ReadEntityAuth"};
+const string update_auth {"UpdateEntityAuth"};
+
+// The two optional operations from Assignment 1
+const string add_property {"AddPropertyAdmin"};
+const string update_property {"UpdatePropertyAdmin"};
 
 /*
   Cache of opened tables
@@ -166,53 +174,155 @@ unordered_map<string,string> get_json_body(http_request message) {
   GET is the only request that has no command. All
   operands specify the value(s) to be retrieved.
  */
-void handle_get(http_request message) { 
+void handle_get(http_request message) {
+
+  unordered_map<string,string> json_body {get_json_body(message)};
+
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** GET " << path << endl;
   auto paths = uri::split_path(path);
   // Need at least a table name
-  if (paths.size() < 1) {
+  if (paths.size() < 2) {
     message.reply(status_codes::BadRequest);
     return;
   }
 
-  unordered_map<string,string> json_body {get_json_body (message)};
-
-  cloud_table table {table_cache.lookup_table(paths[0])};
+  cloud_table table = table_cache.lookup_table(paths[1]);
   if ( ! table.exists()) {
     message.reply(status_codes::NotFound);
     return;
   }
 
   // GET all entries in table
-  if (paths.size() == 1) {
+  if (paths.size() == 2) {
     table_query query {};
     table_query_iterator end;
     table_query_iterator it = table.execute_query(query);
     vector<value> key_vec;
+
+    if (json_body.size() == 0) {
+      cout << "**** No JSON body found" << endl;
+      while (it != end) {
+        cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
+        
+        prop_vals_t keys {
+          make_pair("Partition",value::string(it->partition_key())),
+          make_pair("Row", value::string(it->row_key()))
+        };
+        
+        keys = get_properties(it->properties(), keys);
+
+      /*cout << std::get<0>(keys[2]) << endl;      
+      cout << value::object(keys) << endl;
+        cout << it->partition_key() << endl;
+        cout << keys.size() << endl;*/
+
+        key_vec.push_back(value::object(keys));
+        ++it;
+      }
+      message.reply(status_codes::OK, value::array(key_vec));
+      return;
+  }
+  else if (json_body.size() > 0) {
+    cout << "**** JSON Body found" << endl;
+
+    bool entityExists = false;
     while (it != end) {
-      cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
-      prop_vals_t keys {
-	make_pair("Partition",value::string(it->partition_key())),
-	make_pair("Row", value::string(it->row_key()))};
-      keys = get_properties(it->properties(), keys);
-      key_vec.push_back(value::object(keys));
-      ++it;
+      int count = 0;
+      bool outputKey = false;
+      for(const auto& n : json_body) {
+          
+          prop_vals_t keys {
+            make_pair("Partition",value::string(it->partition_key())),
+            make_pair("Row", value::string(it->row_key()))
+        };
+          
+          keys = get_properties(it->properties(), keys);
+          //cout << value::object(keys) << endl;
+          //cout << it->partition_key() << endl;
+          
+          for (int i = 2; i < keys.size(); i = i + 2) {
+            ///cout << "for loop" << endl;
+            //cout << n.first << "    " << std::get<0>(keys[i]) << endl;
+            if (n.first == std::get<0>(keys[i])) {
+              //cout << "if statement" << endl;
+              count++;
+              if (!outputKey) {
+                cout << "Key: " << it->partition_key() << " / " << it->row_key() << endl;
+                outputKey = true;
+              }
+          }
+        }
+        //cout << count << "          " << keys.size() << endl;
+        if(count == keys.size() - 2) {
+          key_vec.push_back(value::object(keys));
+          entityExists = true;
+        }
+        }
+    ++it;
+
     }
-    message.reply(status_codes::OK, value::array(key_vec));
+    if (entityExists) {
+        message.reply(status_codes::OK, value::array(key_vec));
+        return;
+    }
+    else {
+      message.reply(status_codes::BadRequest);
+    }
+  }
+  
+  }
+  else if (paths.size() == 0) {
+    message.reply(status_codes::BadRequest);
     return;
   }
 
-  // GET specific entry: Partition == paths[1], Row == paths[2]
-  if (paths.size() != 3) {
-    message.reply (status_codes::BadRequest);
+  // GET specific entry: Partition == paths[2], Row == paths[3]
+  if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
+  {
+  message.reply(status_codes::BadRequest);
+  return;
+  }
+  if (paths.size() < 4)
+  {
+    message.reply(status_codes::BadRequest);
     return;
   }
-
-  table_operation retrieve_operation {table_operation::retrieve_entity(paths[1], paths[2])};
+  
+  if (paths[3] == "*") {
+    table_query query2 {};
+    query2.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[2])));
+    table_query_iterator it = table.execute_query(query2);
+    table_query_iterator end;
+    vector<value> values2_vec {};
+    bool partition_exists = false;
+    while (it != end) {
+        if (it->partition_key() == paths[2]) {
+          partition_exists = true;
+        prop_vals_t values2 {
+          //make_pair("Partition", value::string(it->partition_key())),
+          //make_pair("Row", value::string(it->row_key()))
+        };
+        values2 = get_properties(it->properties(), values2);
+        values2_vec.push_back(value::object(values2));
+        ++it;
+      }
+    }
+    if (partition_exists) {
+      message.reply(status_codes::OK, value::array(values2_vec));
+      return;
+    }
+    else {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+  }
+  
+  table_operation retrieve_operation {table_operation::retrieve_entity(paths[2],paths[3])};
   table_result retrieve_result {table.execute(retrieve_operation)};
   cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
-  if (retrieve_result.http_status_code() == status_codes::NotFound) {
+  if (retrieve_result.http_status_code() == status_codes::NotFound)
+  {
     message.reply(status_codes::NotFound);
     return;
   }
@@ -222,10 +332,20 @@ void handle_get(http_request message) {
   
   // If the entity has any properties, return them as JSON
   prop_vals_t values (get_properties(properties));
+  vector<pair<string,value>> entityvals 
+  {
+    ///make_pair("Partition", value::string(paths[2])),
+    //make_pair("Row", value::string(paths[3]))
+  };
+  entityvals.insert(entityvals.end(), values.begin(), values.end());
   if (values.size() > 0)
-    message.reply(status_codes::OK, value::object(values));
+  {
+    message.reply(status_codes::OK, value::object(entityvals));
+  }
   else
+  {
     message.reply(status_codes::OK);
+  }
 }
 
 /*
@@ -243,7 +363,7 @@ void handle_post(http_request message) {
 
   string table_name {paths[1]};
   cloud_table table {table_cache.lookup_table(table_name)};
-
+  
   // Create table (idempotent if table exists)
   if (paths[0] == create_table) {
     cout << "Create " << table_name << endl;
@@ -272,23 +392,26 @@ void handle_put(http_request message) {
     return;
   }
 
-  unordered_map<string,string> json_body {get_json_body (message)};  
-
-  cloud_table table {table_cache.lookup_table(paths[1])};
-  if ( ! table.exists()) {
-    message.reply(status_codes::NotFound);
-    return;
-  }
-
-  table_entity entity {paths[2], paths[3]};
-
-  // Update entity
-  try {
-    if (paths[0] == update_entity) {
+   if (paths.size() == 4)
+  {
+      if (paths[0] == add_property || paths[0] == update_property) //optional operations that weren't implemented
+    {
+      message.reply(status_codes::NotImplemented); 
+      return;
+    }
+    if (paths[0] == update_entity)
+    {
+      table_cache.init(storage_connection_string);
+      cloud_table table {table_cache.lookup_table(paths[1])};
+      if ( ! table.exists()) {
+        message.reply(status_codes::NotFound);
+      return;
+      }
+      table_entity entity {paths[2], paths[3]};
       cout << "Update " << entity.partition_key() << " / " << entity.row_key() << endl;
       table_entity::properties_type& properties = entity.properties();
-      for (const auto v : json_body) {
-	properties[v.first] = entity_property {v.second};
+      for (const auto v : get_json_body(message)) {
+        properties[v.first] = entity_property {v.second};
       }
 
       table_operation operation {table_operation::insert_or_merge_entity(entity)};
@@ -296,14 +419,26 @@ void handle_put(http_request message) {
 
       message.reply(status_codes::OK);
     }
-    else {
+    else 
+    {
       message.reply(status_codes::BadRequest);
     }
   }
-  catch (const storage_exception& e)
-  {
-    cout << "Azure Table Storage error: " << e.what() << endl;
-    message.reply(status_codes::InternalError);
+
+  cloud_table table = table_cache.lookup_table(paths[1]);
+  if ( ! table.exists()) {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+
+  if (paths[0] == update_auth) {
+    message.reply(update_with_token(message, tables_endpoint, get_json_body(message)));
+  }
+  else if (paths[0] == read_auth) {
+    message.reply(status_codes::Forbidden);
+  }
+  else {
+    message.reply(status_codes::NotFound);
   }
 }
 
