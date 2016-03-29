@@ -20,7 +20,7 @@
 #include <was/storage_account.h>
 #include <was/table.h>
 
-#include "ServerUtils.cpp"
+#include "ServerUtils.h"
 #include "TableCache.h"
 #include "make_unique.h"
 
@@ -56,6 +56,7 @@ using web::http::http_headers;
 using web::http::http_request;
 using web::http::methods;
 using web::http::status_codes;
+using web::http::status_code;
 using web::http::uri;
 
 using web::json::value;
@@ -73,7 +74,7 @@ const string delete_entity {"DeleteEntityAdmin"};
 // Not implemented, catches and does nothing
 const string add_property {"AddPropertyAdmin"};
 const string update_property {"UpdatePropertyAdmin"};
-const string read_auth {"ReadEntityAuth";}
+const string read_auth {"ReadEntityAuth"};
 const string update_auth {"UpdateEntityAuth"};
 
 
@@ -170,19 +171,7 @@ void handle_get(http_request message) {
 
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** GET " << path << endl;
-  auto paths = uri::split_path(path);
-
-  // Read entity with authorization, return status code OK,
-  // and return entity to be read in JSON array
-
-  vector<value> auth_vec;
-
-  if (paths[0] == read_auth && 
-    std::get<0>(read_with_token(message, tables_endpoint)) == status::OK)
-  {
-    auth_vec.push_back(tables_endpoint);
-    message.reply(status_codes::OK, value::array(auth_vec);
-  }
+  auto paths = uri::split_path(path);  
 
   // Need at least a table name
   if (paths.size() < 1) {
@@ -263,7 +252,7 @@ void handle_get(http_request message) {
 					entityExists = true;
 				}
 	    	}
-		++it;
+		    ++it;
 
 		}
 		if (entityExists) {
@@ -282,39 +271,52 @@ void handle_get(http_request message) {
   }
 
   // GET specific entry: Partition == paths[1], Row == paths[2]
-  if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
+
+   // Read entity with authorization, return status code OK,
+  // and return entity to be read in JSON array
+
+  pair<status_code,table_entity> authenticator = read_with_token(message, tables_endpoint);
+
+  if (paths[0] == read_auth && std::get<0>(authenticator) == status_codes::OK)
   {
-	message.reply(status_codes::BadRequest);
-	return;
-  }
-  if (paths.size() < 3)
-  {
-	  message.reply(status_codes::BadRequest);
-	  return;
-  }
+    if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
+    {
+	     message.reply(status_codes::BadRequest);
+	     return;
+    }
+
+    if (paths.size() < 3)
+    {
+	    message.reply(status_codes::BadRequest);
+	    return;
+    }
   
-  if (paths[2] == "*")
-  {
-	  table_query query2 {};
-	  query2.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[1])));
-	  table_query_iterator it = table.execute_query(query2);
-	  table_query_iterator end;
-	  vector<value> values2_vec {};
+    if (paths[2] == "*")
+    {
+	    table_query query2 {};
+	    query2.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[1])));
+	    table_query_iterator it = table.execute_query(query2);
+	    table_query_iterator end;
+	    vector<value> values2_vec {};
   	  bool partition_exists = false;
-	  while (it != end) {
+	    while (it != end) 
+      {
 	  
-	  	  if (it->partition_key() == paths[1]) {
+	  	  if (it->partition_key() == paths[1]) 
+        {
 		  	  partition_exists = true;
-			  prop_vals_t values2 
-			  {
-				  make_pair("Partition", value::string(it->partition_key())),
-				  make_pair("Row", value::string(it->row_key()))
-			  };
-			  values2 = get_properties(it->properties(), values2);
-			  values2_vec.push_back(value::object(values2));
-			  ++it;
-		  }
-	  }
+			    prop_vals_t values2 
+			    {
+				    make_pair("Partition", value::string(it->partition_key())),
+				    make_pair("Row", value::string(it->row_key()))
+			    };
+			    values2 = get_properties(it->properties(), values2);
+			    values2_vec.push_back(value::object(values2));
+			    ++it;
+		    }
+	    }
+    
+
 	  if (partition_exists) {
 		  message.reply(status_codes::OK, value::array(values2_vec));
 		  return;
@@ -324,6 +326,7 @@ void handle_get(http_request message) {
 	  	return;
 	  }
   }
+}
   
   table_operation retrieve_operation {table_operation::retrieve_entity(paths[1],paths[2])};
   table_result retrieve_result {table.execute(retrieve_operation)};
@@ -354,6 +357,54 @@ void handle_get(http_request message) {
     message.reply(status_codes::OK);
   }
 }
+
+/*void get_helper()
+{
+     // GET specific entry: Partition == paths[1], Row == paths[2]
+  if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
+  {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
+
+  if (paths.size() < 3)
+  {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
+  
+    table_query stuff {};
+    stuff.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[1])));
+    table_query_iterator count = table.execute_query(stuff);
+    table_query_iterator end;
+    bool partition_exists = false;
+    vector<value> auth_vec;
+
+    partition_exists = true;
+    prop_vals_t auth_ent 
+    {
+      make_pair("Partition", value::string(count->partition_key())),
+      make_pair("Row", value::string(count->row_key()))
+    };
+
+    auth_ent = get_properties(count->properties(), auth_ent);
+    auth_vec.push_back(value::object(auth_ent));
+    ++count;
+    
+
+    if (partition_exists) 
+    {
+      message.reply(status_codes::OK, value::array(auth_vec));
+      return;
+    }
+
+    else 
+    {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+  
+}*/
 
 /*
   Top-level routine for processing all HTTP POST requests.
@@ -389,7 +440,8 @@ void handle_post(http_request message) {
 /*
   Top-level routine for processing all HTTP PUT requests.
  */
-void handle_put(http_request message) {
+void handle_put(http_request message) 
+{
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** PUT " << path << endl;
   auto paths = uri::split_path(path);
@@ -398,13 +450,15 @@ void handle_put(http_request message) {
   unordered_map<string,string> json_body {get_json_body(message)};
 
   // Need at least an operation, table name, partition, and row
-  if (paths.size() < 4) {
+  if (paths.size() < 4) 
+  {
     message.reply(status_codes::BadRequest);
     return;
   }
 
   cloud_table table {table_cache.lookup_table(paths[1])};
-  if ( ! table.exists()) {
+  if ( ! table.exists()) 
+  {
     message.reply(status_codes::NotFound);
     return;
   }
@@ -419,7 +473,7 @@ void handle_put(http_request message) {
 
 
 
-  if (update_with_token(message, tables_endpoint, get_json_body(message)) == status::OK)
+  if (update_with_token(message, tables_endpoint, json_body) == status_codes::OK)
   {
     // Update entity
     if (paths[0] == update_entity) 
@@ -439,17 +493,23 @@ void handle_put(http_request message) {
 
           message.reply(status_codes::OK);
       }
-    }
+    
 
-    catch (const storage_exception& e) 
-    {
-      cout << "Azure Table Storage error: " << e.what() << endl;
-      cout << e.result().extended_error().message() << endl;
+      catch (const storage_exception& e) 
+      {
+        cout << "Azure Table Storage error: " << e.what() << endl;
+        cout << e.result().extended_error().message() << endl;
       
-      if (e.result().http_status_code() == status_codes::Forbidden)
-        message.reply(status_codes::Forbidden);
-      else
-        message.reply(status_codes::InternalError);
+        if (e.result().http_status_code() == status_codes::Forbidden)
+        {
+          message.reply(status_codes::Forbidden);
+        }
+
+        else
+        {
+          message.reply(status_codes::InternalError);
+        }
+      }
     }
 
     else 
@@ -458,6 +518,7 @@ void handle_put(http_request message) {
     }
   }
 }
+
 
 /*
   Top-level routine for processing all HTTP DELETE requests.
@@ -535,3 +596,4 @@ int main (int argc, char const * argv[]) {
   listener.close().wait();
   cout << "Closed" << endl;
 }
+
