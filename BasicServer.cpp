@@ -55,6 +55,7 @@ using std::vector;
 using web::http::http_headers;
 using web::http::http_request;
 using web::http::methods;
+using web::http::status_code;
 using web::http::status_codes;
 using web::http::uri;
 
@@ -195,6 +196,11 @@ void handle_get(http_request message) {
 
   // GET all entries in table
   if (paths.size() == 2) {
+    if (paths[0] != read_entity) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+
     table_query query {};
     table_query_iterator end;
     table_query_iterator it = table.execute_query(query);
@@ -272,17 +278,7 @@ void handle_get(http_request message) {
   }
   
   }
-  else if (paths.size() == 0) {
-    message.reply(status_codes::BadRequest);
-    return;
-  }
-
   // GET specific entry: Partition == paths[2], Row == paths[3]
-  if (paths.size() < 2) //sample: "http://localhost:34568/TableName/Partition/Row" Tablename = paths[0], Partition = paths[1], Row = paths[2]
-  {
-  message.reply(status_codes::BadRequest);
-  return;
-  }
   if (paths.size() < 4)
   {
     message.reply(status_codes::BadRequest);
@@ -290,6 +286,11 @@ void handle_get(http_request message) {
   }
   
   if (paths[3] == "*") {
+    if (paths[0] != read_entity) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+
     table_query query2 {};
     query2.set_filter_string(azure::storage::table_query::generate_filter_condition(U("PartitionKey"), azure::storage::query_comparison_operator::equal, U(paths[2])));
     table_query_iterator it = table.execute_query(query2);
@@ -300,8 +301,8 @@ void handle_get(http_request message) {
         if (it->partition_key() == paths[2]) {
           partition_exists = true;
         prop_vals_t values2 {
-          //make_pair("Partition", value::string(it->partition_key())),
-          //make_pair("Row", value::string(it->row_key()))
+          make_pair("Partition", value::string(it->partition_key())),
+          make_pair("Row", value::string(it->row_key()))
         };
         values2 = get_properties(it->properties(), values2);
         values2_vec.push_back(value::object(values2));
@@ -317,35 +318,87 @@ void handle_get(http_request message) {
       return;
     }
   }
+
+  //GET specific entity 
+  if (paths.size() == 4) { 
+    if (paths[0] != read_entity) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+    table_operation retrieve_operation {table_operation::retrieve_entity(paths[2],paths[3])};
+    table_result retrieve_result {table.execute(retrieve_operation)};
+    cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
+    if (retrieve_result.http_status_code() == status_codes::NotFound)
+    {
+      message.reply(status_codes::NotFound);
+      return;
+    }
+
+    table_entity entity {retrieve_result.entity()};
+    table_entity::properties_type properties {entity.properties()};
+    
+    // If the entity has any properties, return them as JSON
+    prop_vals_t values (get_properties(properties));
+    vector<pair<string,value>> entityvals 
+    {
+      ///make_pair("Partition", value::string(paths[2])),
+      //make_pair("Row", value::string(paths[3]))
+    };
+    entityvals.insert(entityvals.end(), values.begin(), values.end());
+    if (values.size() > 0)
+    {
+      message.reply(status_codes::OK, value::object(entityvals));
+      return;
+    }
+    else
+    {
+      message.reply(status_codes::OK);
+      return;
+    }
+  }
   
-  table_operation retrieve_operation {table_operation::retrieve_entity(paths[2],paths[3])};
-  table_result retrieve_result {table.execute(retrieve_operation)};
-  cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
-  if (retrieve_result.http_status_code() == status_codes::NotFound)
-  {
-    message.reply(status_codes::NotFound);
+  //Get with read_auth and token
+  if (paths.size() >= 5) {
+    cout << "**** GET using token" << endl;
+    if (paths[0] != read_auth) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+    pair<status_code, table_entity> reader {
+      read_with_token (message,
+        tables_endpoint
+      )
+    };
+    cout << "HTTP code: " << reader.first << endl;
+    if (reader.first == status_codes::OK) {
+      ///value v {value::table_entity(reader.second)};
+      table_entity::properties_type properties {reader.second.properties()};
+  
+      // If the entity has any properties, return them as JSON
+      prop_vals_t values (get_properties(properties));
+      //cout << std::get<1>(values[0]) << endl;
+      vector<pair<string,value>> entityvals 
+      {
+        ///make_pair("Partition", value::string(paths[2])),
+        //make_pair("Row", value::string(paths[3]))
+      };
+      entityvals.insert(entityvals.end(), values.begin(), values.end());
+
+      message.reply(status_codes::OK, value::object(entityvals));
+      return;
+    }
+    else {
+      message.reply(reader.first);
+      return;
+    }
+
+  }
+  else if (paths[0] == read_auth) {
+    message.reply(status_codes::BadRequest);
     return;
   }
 
-  table_entity entity {retrieve_result.entity()};
-  table_entity::properties_type properties {entity.properties()};
-  
-  // If the entity has any properties, return them as JSON
-  prop_vals_t values (get_properties(properties));
-  vector<pair<string,value>> entityvals 
-  {
-    ///make_pair("Partition", value::string(paths[2])),
-    //make_pair("Row", value::string(paths[3]))
-  };
-  entityvals.insert(entityvals.end(), values.begin(), values.end());
-  if (values.size() > 0)
-  {
-    message.reply(status_codes::OK, value::object(entityvals));
-  }
-  else
-  {
-    message.reply(status_codes::OK);
-  }
+  message.reply(status_codes::BadRequest);
 }
 
 /*
@@ -433,12 +486,15 @@ void handle_put(http_request message) {
 
   if (paths[0] == update_auth) {
     message.reply(update_with_token(message, tables_endpoint, get_json_body(message)));
+    return;
   }
   else if (paths[0] == read_auth) {
     message.reply(status_codes::Forbidden);
+    return;
   }
   else {
     message.reply(status_codes::NotFound);
+    return;
   }
 }
 

@@ -214,9 +214,16 @@ void handle_get(http_request message) {
     message.reply(status_codes::NotFound);
     return;
   }
+
+  //Checks to see if pass, DataPartition and DataRow exists
+  if (values.size() < 3) {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
   
   string partition {std::get<1>(values[2])};
   string row {std::get<1>(values[1])};
+
   uint8_t permission {};
   if (get_update_token_op == paths[0]) {
     permission = table_shared_access_policy::permissions::read |

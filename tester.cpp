@@ -356,12 +356,11 @@ pair<status_code,string> get_read_token(const string& addr,  const string& useri
                                               )
   };
   cerr << "token " << result.second << endl;
-  cout << result.first << endl;
   if (result.first != status_codes::OK) {
     return make_pair (result.first, "");
   }
   else {
-    string token {result.second["token"].as_string()};
+    string token {result.second.as_string()};
     return make_pair (result.first, token);
   }
 }
@@ -493,7 +492,7 @@ SUITE(GET) {
       + BasicFixture::partition + "\",\""
       + "Row" + "\":\""
       + BasicFixture::row + "\",\""    */
-     + BasicFixture::property + "\":\"" 
+      + BasicFixture::property + "\":\"" 
       + BasicFixture::prop_val + "\"" 
       + "}",  
       result.second.serialize());
@@ -533,17 +532,17 @@ SUITE(GET) {
    
       
       CHECK_EQUAL(string("[{\"")
-         /*+ "Partition" + "\":\""
+         + "Partition" + "\":\""
          + BasicFixture::partition + "\",\""
          + "Row" + "\":\""
-         + BasicFixture::row + "\",\""*/
+         + BasicFixture::row + "\",\""
          + BasicFixture::property + "\":\"" 
          + BasicFixture::prop_val + "\"" 
          + "},{\""
-         /*+ "Partition" + "\":\""
+         + "Partition" + "\":\""
          + BasicFixture::partition + "\",\""
          + "Row" + "\":\""
-         + row + "\",\""*/
+         + row + "\",\""
          + property + "\":\"" 
          + prop_val + "\""
          + "}]",
@@ -891,8 +890,8 @@ SUITE(UPDATE_AUTH) {
       )
     };
 
-    cout << ret_res.second.serialize() << endl;
-    cout << expect1 << endl;
+    //cout << ret_res.second.serialize() << endl;
+    //cout << expect1 << endl;
                              
     compare_json_values (expect1, ret_res.second);
 
@@ -992,39 +991,169 @@ SUITE(UPDATE_AUTH) {
 
 
   }
+}
 
-/*  SUITE(GET_AUTH) {
-    TEST_FIXTURE(AuthFixture, GetAuth) {
-      cout << ">> GetAuth Test" << endl;
+SUITE(GET_AUTH) {
+  TEST_FIXTURE(AuthFixture, GetAuth) {
+    cout << ">> GetAuth Test" << endl;
 
-      pair<string,string> added_prop {make_pair(string("born"),string("1942"))};
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res {
+      get_read_token(AuthFixture::auth_addr,
+                       AuthFixture::userid,
+                       AuthFixture::user_pwd)
+    };
 
-      cout << "Requesting token" << endl;
-      pair<status_code,string> token_res {
-        get_read_token(AuthFixture::auth_addr,
-                         AuthFixture::userid,
-                         AuthFixture::user_pwd)
-      };
-
-      cout << "Token response " << token_res.first << endl;
-      cout << token_res.second << endl;
-      CHECK_EQUAL ( status_codes::OK, token_res.first);
+    cout << "Token response " << token_res.first << endl;
+    CHECK_EQUAL ( status_codes::OK, token_res.first);
       
-      //read_entity_auth is the token for reading
-      pair<status_code,value> result {
-        do_request (methods::GET,
+    pair<status_code,value> result {
+      do_request (methods::GET,
+                  string(AuthFixture::addr)
+                  + read_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row
+      )
+    };
+    //cout << result.second.serialize() << endl;
+
+    vector<pair<string, string>> expect {
+      make_pair("SONG", "RESPECT")
+    };
+    value expect1 {
+      build_json_object (expect)
+    };
+              
+    CHECK_EQUAL (string("{\"")
+      + AuthFixture::property + "\":\""
+      + AuthFixture::prop_val + "\"}",
+      result.second.serialize());
+
+    //Less than 4 parameters
+    cout << "Edge GET_AUTH 1" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::GET,
                     string(AuthFixture::addr)
                     + read_entity_auth + "/"
                     + AuthFixture::table + "/"
                     + token_res.second + "/"
+                    + AuthFixture::partition
+        )
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result2.first);
+
+
+    //Table does not exist
+    cout << "Edge GET_AUTH 2" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + "NotATable" + "/"
+                    + token_res.second + "/"
                     + AuthFixture::partition + "/"
-                    + AuthFixture::row,
-                    value::object (vector<pair<string,value>>
-                                     {make_pair(added_prop.first,
-                                                value::string(added_prop.second))})
-                    )
-      };
-    }
-  }*/
+                    + AuthFixture::row
+        )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result3.first);
+
+    //partition and row does not retrieve anything
+    cout << "Edge GET_AUTH 3" << endl;
+    pair<status_code, value> result4 {
+      do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + "NotA,Partition" + "/"
+                    + "NotARow"
+        )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result4.first);
+
+    //token does not authorize access
+    cout << "Edge GET_AUTH 4" << endl;
+    pair<status_code, value> result5 {
+      do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_auth + "/"
+                    + AuthFixture::table + "/"
+                    + "UnauthorizedToken" + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row
+        )
+    };
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
+
+    //using admin instead of auth
+    cout << "Edge GET_AUTH 5" << endl;
+    pair<status_code, value> result6 {
+      do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_admin + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row
+        )
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result6.first);
+
+  }
+
 }
+
+SUITE(AUTH) {
+  TEST_FIXTURE(AuthFixture, Auth) {
+    //Function for read is the same as update (just copied
+    //and pasted), so no need to  run more tests for read.
+    //Only difference is that it pipes a read op instead of
+    //an update op.
+
+    cout << ">> Auth Test" << endl;
+
+    //Invalid userID
+    cout << "Test AUTH 1" << endl;
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res {
+      get_update_token(AuthFixture::auth_addr,
+                       "NotAUserID",
+                       AuthFixture::user_pwd)
+    };
+    cout << "Token response " << token_res.first << endl;
+    CHECK_EQUAL ( status_codes::NotFound, token_res.first);
+  
+    //Invalid password
+    cout << "Test AUTH 2" << endl;
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res2 {
+      get_update_token(AuthFixture::auth_addr,
+                       AuthFixture::userid,
+                       "NotAPassword")
+    };
+    cout << "Token response " << token_res2.first << endl;
+    CHECK_EQUAL ( status_codes::NotFound, token_res2.first);
+
+    //Wrong address
+    cout << "Test AUTH 3" << endl;
+    try {
+      cout << "Requesting token" << endl;
+      pair<status_code,string> token_res3 {
+        get_update_token(AuthFixture::addr,
+                         AuthFixture::userid,
+                         AuthFixture::user_pwd)
+      };
+      cout << "Token response " << token_res3.first << endl;
+      CHECK_EQUAL(status_codes::NotFound, token_res3.first);
+    }
+    catch(const storage_exception& e) {
+      cout << "Exception occured" << endl;
+    }
+
+
+  }
+}
+
 
