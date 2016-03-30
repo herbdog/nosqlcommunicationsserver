@@ -1017,7 +1017,6 @@ SUITE(GET_AUTH) {
                   + AuthFixture::row
       )
     };
-
     //cout << result.second.serialize() << endl;
 
     vector<pair<string, string>> expect {
@@ -1088,13 +1087,72 @@ SUITE(GET_AUTH) {
     };
     CHECK_EQUAL(status_codes::NotFound, result5.first);
 
+    //using admin instead of auth
+    cout << "Edge GET_AUTH 5" << endl;
+    pair<status_code, value> result6 {
+      do_request (methods::GET,
+                    string(AuthFixture::addr)
+                    + read_entity_admin + "/"
+                    + AuthFixture::table + "/"
+                    + token_res.second + "/"
+                    + AuthFixture::partition + "/"
+                    + AuthFixture::row
+        )
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result6.first);
+
   }
 
 }
 
 SUITE(AUTH) {
   TEST_FIXTURE(AuthFixture, Auth) {
+    //Function for read is the same as update (just copied
+    //and pasted), so no need to  run more tests for read.
+    //Only difference is that it pipes a read op instead of
+    //an update op.
+
     cout << ">> Auth Test" << endl;
+
+    //Invalid userID
+    cout << "Test AUTH 1" << endl;
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res {
+      get_update_token(AuthFixture::auth_addr,
+                       "NotAUserID",
+                       AuthFixture::user_pwd)
+    };
+    cout << "Token response " << token_res.first << endl;
+    CHECK_EQUAL ( status_codes::NotFound, token_res.first);
+  
+    //Invalid password
+    cout << "Test AUTH 2" << endl;
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res2 {
+      get_update_token(AuthFixture::auth_addr,
+                       AuthFixture::userid,
+                       "NotAPassword")
+    };
+    cout << "Token response " << token_res2.first << endl;
+    CHECK_EQUAL ( status_codes::NotFound, token_res2.first);
+
+    //Wrong address
+    cout << "Test AUTH 3" << endl;
+    try {
+      cout << "Requesting token" << endl;
+      pair<status_code,string> token_res3 {
+        get_update_token(AuthFixture::addr,
+                         AuthFixture::userid,
+                         AuthFixture::user_pwd)
+      };
+      cout << "Token response " << token_res3.first << endl;
+      CHECK_EQUAL(status_codes::NotFound, token_res3.first);
+    }
+    catch(const storage_exception& e) {
+      cout << "Exception occured" << endl;
+    }
+
+
   }
 }
 

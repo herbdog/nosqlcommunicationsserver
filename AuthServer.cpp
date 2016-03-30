@@ -185,6 +185,7 @@ void handle_get(http_request message) {
   //CONTAINS THE PASSWORD SO WE NEED ONE OF THESE CALLS
   unordered_map<string,string> json_body {get_json_body(message)}; 
 
+  table_cache.init(storage_connection_string);
   cloud_table table {table_cache.lookup_table(auth_table_name)};  
   if ( ! table.exists()) {
     message.reply(status_codes::NotFound);
@@ -213,9 +214,16 @@ void handle_get(http_request message) {
     message.reply(status_codes::NotFound);
     return;
   }
+
+  //Checks to see if pass, DataPartition and DataRow exists
+  if (values.size() < 3) {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
   
   string partition {std::get<1>(values[2])};
   string row {std::get<1>(values[1])};
+
   uint8_t permission {};
   if (get_update_token_op == paths[0]) {
     permission = table_shared_access_policy::permissions::read |

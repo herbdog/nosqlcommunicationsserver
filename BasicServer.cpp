@@ -278,7 +278,6 @@ void handle_get(http_request message) {
   }
   
   }
-
   // GET specific entry: Partition == paths[2], Row == paths[3]
   if (paths.size() < 4)
   {
@@ -357,9 +356,10 @@ void handle_get(http_request message) {
       return;
     }
   }
-
+  
   //Get with read_auth and token
-  if (paths.size() == 5) {
+  if (paths.size() >= 5) {
+    cout << "**** GET using token" << endl;
     if (paths[0] != read_auth) {
       message.reply(status_codes::BadRequest);
       return;
@@ -369,6 +369,7 @@ void handle_get(http_request message) {
         tables_endpoint
       )
     };
+    cout << "HTTP code: " << reader.first << endl;
     if (reader.first == status_codes::OK) {
       ///value v {value::table_entity(reader.second)};
       table_entity::properties_type properties {reader.second.properties()};
@@ -396,6 +397,8 @@ void handle_get(http_request message) {
     message.reply(status_codes::BadRequest);
     return;
   }
+
+  message.reply(status_codes::BadRequest);
 }
 
 /*
