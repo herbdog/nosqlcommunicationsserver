@@ -142,7 +142,7 @@ pair<status_code,string> do_get_token (const cloud_table& data_table,
                    const string& partition,
                    const string& row,
                    uint8_t permissions) {
-
+  cout << "Retrieving token from /" + partition + "/" + row << endl;
   utility::datetime exptime {utility::datetime::utc_now() + utility::datetime::from_days(1)};
   try {
     string limited_access_token {
@@ -181,7 +181,83 @@ void handle_get(http_request message) {
     message.reply(status_codes::BadRequest);
     return;
   }
-  message.reply(status_codes::NotImplemented);
+
+  //CONTAINS THE PASSWORD SO WE NEED ONE OF THESE CALLS
+  unordered_map<string,string> json_body {get_json_body(message)}; 
+
+  table_cache.init(storage_connection_string);
+  cloud_table table {table_cache.lookup_table(auth_table_name)};  
+  if ( ! table.exists()) {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+  table_operation retrieve_operation {table_operation::retrieve_entity(auth_table_userid_partition, paths[1])};
+  table_result retrieve_result {table.execute(retrieve_operation)};
+  cout << "HTTP code: " << retrieve_result.http_status_code() << endl;
+  if (retrieve_result.http_status_code() == status_codes::NotFound) { //COULD BE A DIFFERENT STATUS CODE, something about having security issues if an id isnt on the list/if the password is wrong
+    message.reply(status_codes::NotFound);
+    return;
+  } 
+  table_entity entity {retrieve_result.entity()};
+  table_entity::properties_type properties {entity.properties()};
+  prop_str_vals_t values (get_string_properties(properties));
+  if (json_body[auth_table_password_prop] != std::get<1>(values[0])) {
+    message.reply(status_codes::NotFound); //If the passwords dont match (Dont know what the status code needs to be)
+    return;
+  }
+
+  cout << values.size() << endl;
+
+
+  cloud_table table2 {table_cache.lookup_table(data_table_name)};  
+  if ( ! table2.exists()) {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+
+  //Checks to see if pass, DataPartition and DataRow exists
+  if (values.size() < 3) {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
+  
+  string partition {std::get<1>(values[2])};
+  string row {std::get<1>(values[1])};
+
+  uint8_t permission {};
+  if (get_update_token_op == paths[0]) {
+    permission = table_shared_access_policy::permissions::read |
+      table_shared_access_policy::permissions::update;
+  }
+  else if (get_read_token_op == paths[0]) {
+    permission = table_shared_access_policy::permissions::read;
+  }
+  else {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+
+  pair<status_code, string> token {
+    do_get_token (table2,
+      partition,
+      row,
+      permission
+    )
+  };
+
+  value v {value::string(token.second)};
+ 
+ 
+  cout << "HTTP code: " << token.first << endl;  
+  if (token.first == status_codes::OK) {
+    message.reply(status_codes::OK, v);
+    return;
+  }
+  else {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+  //message.reply(status_codes::NotImplemented);
 }
 
 /*

@@ -79,7 +79,6 @@ pair<status_code,table_entity> read_with_token (const http_request& message,
       return make_pair (status_codes::NotFound,
                          table_entity{});
     }
-
     table_entity entity {retrieve_result.entity()};
     return make_pair (status_codes::OK,
                        entity);
