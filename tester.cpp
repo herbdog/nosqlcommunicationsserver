@@ -820,11 +820,7 @@ public:
     };
 
     // Ensure userid and password in system
-    int user_result {put_entity (addr,
-                                 auth_table,
-                                 auth_table_partition,
-                                 userid,
-                                 v)};
+    int user_result {put_entity (addr, auth_table, auth_table_partition, userid, v)};
     cerr << "user auth table insertion result " << user_result << endl;
     if (user_result != status_codes::OK)
       throw std::exception();
@@ -1135,25 +1131,32 @@ SUITE(AUTH) {
     };
     cout << "Token response " << token_res2.first << endl;
     CHECK_EQUAL ( status_codes::NotFound, token_res2.first);
+    
+    //Invalid credentials
+    cout << "Test AUTH 3" << endl;
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res3 {
+      get_update_token(AuthFixture::auth_addr,
+                       "NotAUserID",
+                       "NotAPassword")
+    };
+    cout << "Token response " << token_res3.first << endl;
+    CHECK_EQUAL ( status_codes::NotFound, token_res3.first);
 
     //Wrong address
-    cout << "Test AUTH 3" << endl;
+    cout << "Test AUTH 4" << endl;
     try {
       cout << "Requesting token" << endl;
-      pair<status_code,string> token_res3 {
+      pair<status_code,string> token_res4 {
         get_update_token(AuthFixture::addr,
                          AuthFixture::userid,
                          AuthFixture::user_pwd)
       };
-      cout << "Token response " << token_res3.first << endl;
-      CHECK_EQUAL(status_codes::NotFound, token_res3.first);
+      cout << "Token response " << token_res4.first << endl;
+      CHECK_EQUAL(status_codes::NotFound, token_res4.first);
     }
     catch(const storage_exception& e) {
       cout << "Exception occured" << endl;
     }
-
-
   }
 }
-
-
