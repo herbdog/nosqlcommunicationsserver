@@ -454,6 +454,7 @@ void handle_put(http_request message) {
     }
     if (paths[0] == update_entity)
     {
+      table_cache.init(storage_connection_string);
       cloud_table table {table_cache.lookup_table(paths[1])};
       if ( ! table.exists()) {
         message.reply(status_codes::NotFound);
