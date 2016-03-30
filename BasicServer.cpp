@@ -439,19 +439,21 @@ void handle_put(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** PUT " << path << endl;
   auto paths = uri::split_path(path);
+  
+  if (paths[0] == add_property || paths[0] == update_property) //optional operations that weren't implemented
+  {
+    message.reply(status_codes::NotImplemented); 
+    return;
+  }
+
   // Need at least an operation, table name, partition, and row
   if (paths.size() < 4) {
     message.reply(status_codes::BadRequest);
     return;
   }
 
-   if (paths.size() == 4)
+  if (paths.size() == 4)
   {
-      if (paths[0] == add_property || paths[0] == update_property) //optional operations that weren't implemented
-    {
-      message.reply(status_codes::NotImplemented); 
-      return;
-    }
     if (paths[0] == update_entity)
     {
       table_cache.init(storage_connection_string);
