@@ -644,6 +644,18 @@ SUITE(GET) {
       };
       CHECK_EQUAL(status_codes::NotFound, result7.first);
 
+      //Wrong table, partition, and row
+      cout << "Edge Partition 8" << endl;
+      pair<status_code, value> result8 {
+        do_request (methods::GET,
+          string(BasicFixture::addr)
+          + read_entity_admin + "/"
+          + "NotATable" + "/"
+          + "NotA,Partition" + "/"
+          + "NotA,Row")
+      };
+      CHECK_EQUAL(status_codes::NotFound, result8.first);
+
       CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
    }
 
