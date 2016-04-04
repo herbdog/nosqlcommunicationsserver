@@ -100,7 +100,7 @@ pair<status_code,value> do_request (const method& http_method, const string& uri
             auto content_type (headers.find("Content-Type"));
             if (content_type == headers.end() ||
                 content_type->second != "application/json")
-              return pplx::task<value> ([] { return value {};});
+              return pplx::task<value> ([] { return value::object ();});
             else
               return response.extract_json();
           })
@@ -112,6 +112,37 @@ pair<status_code,value> do_request (const method& http_method, const string& uri
     .wait();
   return make_pair(code, resp_body);
 }
+/*pair<status_code,value> do_request (const method& http_method, const string& uri_string, const value& req_body) {
+  http_request request {http_method};
+  if (req_body != value {}) {
+    http_headers& headers (request.headers());
+    headers.add("Content-Type", "application/json");
+    request.set_body(req_body);
+  }
+
+  status_code code;
+  value resp_body;
+  http_client client {uri_string};
+  client.request (request)
+    .then([&code](http_response response)
+          {
+            code = response.status_code();
+            const http_headers& headers {response.headers()};
+            auto content_type (headers.find("Content-Type"));
+            if (content_type == headers.end() ||
+                content_type->second != "application/json")
+              return pplx::task<value> ([] { return value {};});
+            else
+              return response.extract_json();
+          })
+    .then([&resp_body](value v) -> void
+          {
+            resp_body = v;
+            return;
+          })
+    .wait();
+  return make_pair(code, resp_body);
+}/*
 
 // Version that defaults third argument
 pair<status_code,value> do_request (const method& http_method, const string& uri_string) {
@@ -807,6 +838,8 @@ public:
     if (make_result != status_codes::Created && make_result != status_codes::Accepted) {
       throw std::exception();
     }
+
+    //Change properties to Friends/Status/Updates
     int put_result {put_entity (addr, table, partition, row, property, prop_val)};
     cerr << "put result " << put_result << endl;
     if (put_result != status_codes::OK) {
