@@ -142,7 +142,7 @@ pair<status_code,value> do_request (const method& http_method, const string& uri
           })
     .wait();
   return make_pair(code, resp_body);
-}/*
+}*/
 
 // Version that defaults third argument
 pair<status_code,value> do_request (const method& http_method, const string& uri_string) {
@@ -839,7 +839,7 @@ public:
       throw std::exception();
     }
 
-    //Change properties to Friends/Status/Updates
+    //Change properties to Friends/Status/Updates in new Fixture
     int put_result {put_entity (addr, table, partition, row, property, prop_val)};
     cerr << "put result " << put_result << endl;
     if (put_result != status_codes::OK) {

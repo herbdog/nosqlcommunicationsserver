@@ -17,8 +17,6 @@
 #include "make_unique.h"
 #include "ClientUtils.h"
 
-#include "azure_keys.h"
-
 using azure::storage::cloud_storage_account;
 using azure::storage::storage_credentials;
 using azure::storage::storage_exception;
@@ -61,11 +59,6 @@ using prop_str_vals_t = vector<pair<string,string>>;
 constexpr const char* def_url = "http://localhost:34570";
 
 /*
-  Cache of opened tables
- */
-TableCache table_cache {};
-
-/*
   Top-level routine for processing all HTTP POST requests.
  */
 void handle_post(http_request message) {
@@ -92,7 +85,6 @@ void handle_post(http_request message) {
  */
 int main (int argc, char const * argv[]) {
   cout << "PushServer: Parsing connection string" << endl;
-  table_cache.init (storage_connection_string);
 
   cout << "PushServer: Opening listener" << endl;
   http_listener listener {def_url};

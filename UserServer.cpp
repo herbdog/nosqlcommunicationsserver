@@ -17,7 +17,6 @@
 #include "make_unique.h"
 #include "ClientUtils.h"
 
-#include "azure_keys.h"
 
 using azure::storage::storage_exception;
 using azure::storage::cloud_table;
@@ -64,11 +63,10 @@ const string read_friend_list {"ReadFriendList"};
 
 const string data_table_name {"DataTable"};
 const string auth_table_name {"AuthTable"};
+const string auth_table_password_prop {"Password"};
+const string auth_table_partition_prop {"DataPartition"};
+const string auth_table_row_prop {"DataRow"};
 
-/*
-  Cache of opened tables
- */
-TableCache table_cache {};
 
 /*
   Given an HTTP message with a JSON body, return the JSON
@@ -134,8 +132,8 @@ void handle_post(http_request message) {
   cout << endl << "**** POST " << path << endl;
   auto paths = uri::split_path(path);
 
-  //No operation and userid
-  if (paths.size() < 2) {
+  //No operation and userid, or more parameters than needed
+  if (paths.size() != 2) {
     message.reply(status_codes::NotFound);
     return;
   }
@@ -144,9 +142,11 @@ void handle_post(http_request message) {
   //to get token response and check DataTable
   if (paths[0] == sign_on) {
     //SignOn
+    cout << "**** SignOn" << endl;
   }
   else if (paths[0] == sign_off) {
     //SignOff
+    cout << "**** SignOff" << endl;
   }
   else {
     message.reply(status_codes::NotFound);
@@ -182,7 +182,6 @@ void handle_put(http_request message) {
  */
 int main (int argc, char const * argv[]) {
   cout << "UserServer: Parsing connection string" << endl;
-  table_cache.init (storage_connection_string);
 
   cout << "UserServer: Opening listener" << endl;
   http_listener listener {def_url};
