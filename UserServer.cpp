@@ -38,6 +38,8 @@ using std::pair;
 using std::string;
 using std::unordered_map;
 using std::vector;
+using std::make_tuple;
+using std::tuple;
 
 using web::http::http_headers;
 using web::http::http_request;
@@ -53,6 +55,8 @@ using web::http::experimental::listener::http_listener;
 using prop_str_vals_t = vector<pair<string,string>>;
 
 constexpr const char* def_url = "http://localhost:34572";
+const string auth_addr {"http://localhost:34570/"};
+const string addr {"http://localhost:34568/"};
 
 const string sign_on {"SignOn"};
 const string sign_off {"SignOff"};
@@ -66,6 +70,16 @@ const string auth_table_name {"AuthTable"};
 const string auth_table_password_prop {"Password"};
 const string auth_table_partition_prop {"DataPartition"};
 const string auth_table_row_prop {"DataRow"};
+
+const string get_update_data_op {"GetUpdateData"};
+const string get_read_token_op {"GetReadToken"};
+const string get_update_token_op {"GetUpdateToken"};
+
+const string read_entity_auth {"ReadEntityAuth"};
+const string update_entity_auth {"UpdateEntityAuth"};
+
+//records  users who are signed in
+unordered_map<string,tuple<string,string,string>> session;
 
 
 /*
@@ -112,13 +126,40 @@ unordered_map<string,string> get_json_body(http_request message) {
   return results;
 }
 
+pair<status_code,value> get_update_data(const string& addr,  const string& userid, const string& password) {
+  value pwd {build_json_value (vector<pair<string,string>> {make_pair("Password", password)})};
+  pair<status_code,value> result {do_request (methods::GET,
+                                              addr +
+                                              get_update_data_op + "/" +
+                                              userid,
+                                              pwd
+                                              )
+  };
+  cout << "data: " << result.second << endl;
+  if (result.first != status_codes::OK) {
+    return make_pair (result.first, value {});
+  }
+  else {
+    return make_pair (result.first, result.second);
+  }
+}
+
 /*
   Top-level routine for processing all HTTP GET requests.
  */
 void handle_get(http_request message) { 
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** GET " << path << endl;
-  //message.reply(status_codes::NotImplemented);
+  auto paths = uri::split_path(path);
+
+  //No userid
+  if (paths.size() < 2) {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+
+  message.reply(status_codes::BadRequest);
+  return;
 }
 
 /*
@@ -138,20 +179,74 @@ void handle_post(http_request message) {
     return;
   }
 
+  //Nothing in JSON body
+  if (json_body.size() < 1) {
+    message.reply(status_codes::NotFound);
+    return;
+  }
+
   //Need to call dorequest like in tester.cpp 
   //to get token response and check DataTable
   if (paths[0] == sign_on) {
-    //SignOn
-    cout << "**** SignOn" << endl;
+    string pass = json_body[auth_table_password_prop];
+    string uid = paths[1];
+
+    cout << "**** SignOn " << uid << " " << pass << endl;
+
+    cout << "Requesting token and data" << endl;
+    pair<status_code, value> token_res {
+      get_update_data(auth_addr,
+                      uid,
+                      pass)
+    };
+    if (token_res.first != status_codes::OK) {
+      message.reply(status_codes::NotFound);
+      cout << "SignOn unsuccessful" << endl;
+      return;
+    }
+
+    string DataRow_val = get_json_object_prop(token_res.second, "DataRow");
+    string DataPartition_val = get_json_object_prop(token_res.second, "DataPartition");
+    string token_val = get_json_object_prop(token_res.second, "token");
+
+    pair<status_code,value> result {
+      do_request (methods::GET,
+                  string(addr)
+                  + read_entity_auth + "/"
+                  + data_table_name + "/"
+                  + token_val + "/"
+                  + DataPartition_val + "/"
+                  + DataRow_val
+      )
+    };
+
+    if (status_codes::OK == result.first) {
+      
+      tuple<string,string,string> data = make_tuple(token_val, DataPartition_val, DataRow_val);
+      session.insert({uid, data});
+
+      message.reply(status_codes::OK);
+      cout << "SignOn successful" << endl;
+      return;
+    }
+    else{
+      message.reply(status_codes::NotFound);
+      cout << "SignOn unsuccessful" << endl;
+      return;
+    }
+
+
   }
   else if (paths[0] == sign_off) {
-    //SignOff
     cout << "**** SignOff" << endl;
   }
   else {
     message.reply(status_codes::NotFound);
     return;
   }
+
+  message.reply(status_codes::BadRequest);
+  return;
 }
 
 /*

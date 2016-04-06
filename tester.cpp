@@ -58,6 +58,14 @@ const string update_entity_auth {"UpdateEntityAuth"};
 
 const string get_read_token_op  {"GetReadToken"};
 const string get_update_token_op {"GetUpdateToken"};
+const string get_update_data_op {"GetUpdateData"};
+
+const string sign_on {"SignOn"};
+const string sign_off {"SignOff"};
+const string add_friend {"AddFriend"};
+const string unfriend {"UnFriend"};
+const string update_status {"UpdateStatus"};
+const string read_friend_list {"ReadFriendList"};
 
 // The two optional operations from Assignment 1
 const string add_property_admin {"AddPropertyAdmin"};
@@ -1189,4 +1197,129 @@ SUITE(AUTH) {
   }
 }
 
+class UserFixture {
+public:
+  static constexpr const char* addr {"http://localhost:34568/"};
+  static constexpr const char* auth_addr {"http://localhost:34570/"};
+  static constexpr const char* user_addr {"http://localhost:34572/"};
+  static constexpr const char* push_addr {"http://localhost:34574/"};
+  static constexpr const char* userid {"Gary"};
+  static constexpr const char* user_pwd {"Stu"};
+  static constexpr const char* auth_table {"AuthTable"};
+  static constexpr const char* auth_table_partition {"Userid"};
+  static constexpr const char* auth_pwd_prop {"Password"};
+  static constexpr const char* table {"DataTable"};
+  static constexpr const char* partition {"CAN"};
+  static constexpr const char* row {"Stu,Gary"};
 
+  static constexpr const char* friends {"Friends"};
+  static constexpr const char* friends_val {"USA;Shinoda,Mike"};
+  static constexpr const char* status {"Status"};
+  static constexpr const char* status_val {"I%20Suck"};
+  static constexpr const char* updates {"Updates"};
+  static constexpr const char* updates_val {"Status Updates\n"};
+
+
+public:
+  UserFixture() {
+    int make_result {create_table(addr, table)};
+    cerr << "create result " << make_result << endl;
+    if (make_result != status_codes::Created && make_result != status_codes::Accepted) {
+      throw std::exception();
+    }
+
+    vector<pair<string, value>> v1 {
+      make_pair("Friends", value::string(friends_val)),
+      make_pair("Status", value::string(status_val)),
+      make_pair("Updates", value::string(updates_val))
+    };
+
+    //Change properties to Friends/Status/Updates in new Fixture
+    int put_result {put_entity (addr, table, partition, row, v1)};
+    cerr << "put result " << put_result << endl;
+    if (put_result != status_codes::OK) {
+      throw std::exception();
+    }
+
+    vector<pair<string, value>> v2 {
+      make_pair("Password", value::string(user_pwd)),
+      make_pair("DataPartition", value::string(partition)),
+      make_pair("DataRow", value::string(row))
+    };
+
+    // Ensure userid and password in system
+    int user_result {put_entity (addr,
+                                 auth_table,
+                                 auth_table_partition,
+                                 userid,
+                                 v2)};
+    cerr << "user auth table insertion result " << user_result << endl;
+    if (user_result != status_codes::OK)
+      throw std::exception();
+  }
+
+  ~UserFixture() {
+    int del_ent_result {delete_entity (addr, table, partition, row)};
+    if (del_ent_result != status_codes::OK) {
+      throw std::exception();
+    }
+  }
+};
+
+SUITE(GET_USER) {
+  TEST_FIXTURE(UserFixture, GetUser) {
+    cout << ">> GetUser Test" << endl;
+
+    pair<status_code, value> result {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + read_friend_list + "/"
+                  + userid) //Gary
+    };
+
+    cout << result.first << endl; 
+
+    /* Example code for reference
+
+    cout << "Requesting token" << endl;
+    pair<status_code,string> token_res {
+      get_update_token(AuthFixture::auth_addr,
+                       AuthFixture::userid,
+                       AuthFixture::user_pwd)
+    };
+    cout << "Token response " << token_res.first << endl;
+    CHECK_EQUAL ( status_codes::OK, token_res.first);
+
+    pair<status_code,value> result {
+      do_request (methods::GET,
+                  string(AuthFixture::addr)
+                  + read_entity_auth + "/"
+                  + AuthFixture::table + "/"
+                  + token_res.second + "/"
+                  + AuthFixture::partition + "/"
+                  + AuthFixture::row
+      )
+    };
+    */
+  }
+}
+
+SUITE(POST_USER) {
+  TEST_FIXTURE(UserFixture, SignOn) {
+    cout << "SignOn Test" << endl;
+
+    pair<status_code, value> result {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };                                                     //Stu
+
+    CHECK_EQUAL(status_codes::OK, result.first);
+
+
+  }
+}
