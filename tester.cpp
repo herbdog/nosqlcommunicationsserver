@@ -683,6 +683,18 @@ SUITE(GET) {
       };
       CHECK_EQUAL(status_codes::NotFound, result7.first);
 
+      //Wrong table, partition, and row
+      cout << "Edge Partition 8" << endl;
+      pair<status_code, value> result8 {
+        do_request (methods::GET,
+          string(BasicFixture::addr)
+          + read_entity_admin + "/"
+          + "NotATable" + "/"
+          + "NotA,Partition" + "/"
+          + "NotA,Row")
+      };
+      CHECK_EQUAL(status_codes::NotFound, result8.first);
+
       CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
    }
 
@@ -861,11 +873,7 @@ public:
     };
 
     // Ensure userid and password in system
-    int user_result {put_entity (addr,
-                                 auth_table,
-                                 auth_table_partition,
-                                 userid,
-                                 v)};
+    int user_result {put_entity (addr, auth_table, auth_table_partition, userid, v)};
     cerr << "user auth table insertion result " << user_result << endl;
     if (user_result != status_codes::OK)
       throw std::exception();
@@ -1203,8 +1211,6 @@ SUITE(AUTH) {
     catch(const storage_exception& e) {
       cout << "Exception occured" << endl;
     }
-
-
   }
 }
 
