@@ -204,6 +204,20 @@ void handle_post(http_request message) {
       return;
     }
 
+    //Checks to see if already signed on
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          message.reply(status_codes::OK);
+          cout << "Already signed in" << endl;
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
+    }
+
     string DataRow_val = get_json_object_prop(token_res.second, "DataRow");
     string DataPartition_val = get_json_object_prop(token_res.second, "DataPartition");
     string token_val = get_json_object_prop(token_res.second, "token");
