@@ -135,7 +135,7 @@ pair<status_code,value> get_update_data(const string& addr,  const string& useri
                                               pwd
                                               )
   };
-  cout << "data: " << result.second << endl;
+  //cout << "data: " << result.second << endl;
   if (result.first != status_codes::OK) {
     return make_pair (result.first, value {});
   }
@@ -179,21 +179,20 @@ void handle_post(http_request message) {
     return;
   }
 
-  //Nothing in JSON body
-  if (json_body.size() < 1) {
-    message.reply(status_codes::NotFound);
-    return;
-  }
-
-  //Need to call dorequest like in tester.cpp 
-  //to get token response and check DataTable
+  //Sign the person on
   if (paths[0] == sign_on) {
+    //Nothing in JSON body
+    if (json_body.size() < 1) {
+      message.reply(status_codes::NotFound);
+      return;
+    }
+
     string pass = json_body[auth_table_password_prop];
     string uid = paths[1];
 
     cout << "**** SignOn " << uid << " " << pass << endl;
 
-    cout << "Requesting token and data" << endl;
+    //cout << "Requesting token and data" << endl;
     pair<status_code, value> token_res {
       get_update_data(auth_addr,
                       uid,
@@ -221,7 +220,7 @@ void handle_post(http_request message) {
     };
 
     if (status_codes::OK == result.first) {
-      
+
       tuple<string,string,string> data = make_tuple(token_val, DataPartition_val, DataRow_val);
       session.insert({uid, data});
 
@@ -234,11 +233,26 @@ void handle_post(http_request message) {
       cout << "SignOn unsuccessful" << endl;
       return;
     }
-
-
   }
+  //Sign the person off
   else if (paths[0] == sign_off) {
-    cout << "**** SignOff" << endl;
+    string uid = paths[1];
+    cout << "**** SignOff " << uid << endl;
+
+    for (auto it = session.begin(); it != session.end();) {
+      if (it->first == uid) {
+        it = session.erase(it);
+        message.reply(status_codes::OK);
+        cout << "SignOff successful" << endl;
+        return;
+      }
+      else {
+        ++it;
+      }
+    }
+    message.reply(status_codes::NotFound);
+    cout << "SignOff unsuccessful" << endl;
+    return;
   }
   else {
     message.reply(status_codes::NotFound);
