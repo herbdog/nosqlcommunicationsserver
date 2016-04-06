@@ -1291,7 +1291,7 @@ SUITE(USER) {
     };                                                     //Stu
 
     //wrong password
-    cout << "Edge SignOn1" << endl;
+    cout << "Edge SignOn 1" << endl;
     pair<status_code, value> result2 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
@@ -1304,7 +1304,7 @@ SUITE(USER) {
     CHECK_EQUAL(status_codes::NotFound, result2.first);
 
     //Wrong property
-    cout << "Edge SignOn2" << endl;
+    cout << "Edge SignOn 2" << endl;
     pair<status_code, value> result3 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
@@ -1315,6 +1315,20 @@ SUITE(USER) {
                                               value::string(user_pwd))}))
     };
     CHECK_EQUAL(status_codes::NotFound, result3.first);
+
+    //Wrong operation
+    //Also tests for SignOff
+    cout << "Edge SignOn 3" << endl;
+    pair<status_code, value> result4 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + "sign_up" + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::BadRequest, result4.first);
   }
 
   TEST_FIXTURE(UserFixture, GetUser) {
@@ -1332,6 +1346,17 @@ SUITE(USER) {
                 + friends_val + "\"}", 
                 result.second.serialize()
     );
+
+    //Wrong operation
+    cout << "Edge GetUser 1" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + "NotAReadOp" + "/"
+                  + userid) 
+    };
+    CHECK_EQUAL(result2.first, status_codes::BadRequest);
+
   }
 
   TEST_FIXTURE(UserFixture, SignOff) {
@@ -1345,5 +1370,15 @@ SUITE(USER) {
     };
 
     CHECK_EQUAL(status_codes::OK, result.first);
+  }
+}
+
+SUITE(USER_RAND) {
+  TEST_FIXTURE(UserFixture, rand) {
+    pair<status_code, value> result {
+      do_request (methods::DEL,
+        string(UserFixture::user_addr))
+    };
+    CHECK_EQUAL(status_codes::MethodNotAllowed, result.first);
   }
 }

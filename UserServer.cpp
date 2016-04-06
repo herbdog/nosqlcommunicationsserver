@@ -153,13 +153,18 @@ void handle_get(http_request message) {
   cout << endl << "**** GET " << path << endl;
   auto paths = uri::split_path(path);
 
-  //No userid
-  if (paths.size() < 2) {
-    message.reply(status_codes::NotFound);
+  //No operation
+  if (paths.size() < 1) {
+    message.reply(status_codes::BadRequest);
     return;
   }
 
   if (paths[0] == read_friend_list) {
+    //No userid
+    if (paths.size() < 2) {
+      message.reply(status_codes::NotFound);
+      return;
+    }
     string uid = paths[1];
 
     if (session.size() > 0) {
@@ -316,7 +321,7 @@ void handle_post(http_request message) {
     return;
   }
   else {
-    message.reply(status_codes::NotFound);
+    message.reply(status_codes::BadRequest);
     return;
   }
 }
@@ -332,8 +337,7 @@ void handle_put(http_request message) {
 void handle_delete(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** DELETE " << path << endl;
-  message.reply(status_codes::BadRequest);
-  return;
+
 }
 
 /*
@@ -361,7 +365,7 @@ int main (int argc, char const * argv[]) {
   listener.support(methods::GET, &handle_get);
   listener.support(methods::POST, &handle_post);
   listener.support(methods::PUT, &handle_put);
-  listener.support(methods::DEL, &handle_delete);
+  //listener.support(methods::DEL, &handle_delete);
   listener.open().wait(); // Wait for listener to complete starting
 
   cout << "Enter carriage return to stop UserServer." << endl;
