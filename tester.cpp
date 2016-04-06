@@ -1329,7 +1329,18 @@ SUITE(POST_USER) {
                                               value::string(user_pwd))}))
     };                                                     //Stu
 
-    CHECK_EQUAL(status_codes::OK, result.first);
+    //wrong password
+    cout << "Edge SignOn1" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string("WrongPassword"))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result2.first);
 
 
   }
