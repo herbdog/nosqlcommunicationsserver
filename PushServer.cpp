@@ -66,6 +66,27 @@ void handle_post(http_request message) {
   cout << endl << "**** POST " << path << endl;
 }
 
+void handle_get(http_request message) {
+  string path {uri::decode(message.relative_uri().path())};
+  cout << endl << "**** GET " << path << endl;
+  message.reply(status_codes::BadRequest);
+  return;
+}
+
+void handle_put(http_request message) {
+  string path {uri::decode(message.relative_uri().path())};
+  cout << endl << "**** PUT " << path << endl;
+  message.reply(status_codes::BadRequest);
+  return;
+}
+
+void handle_delete(http_request message) {
+  string path {uri::decode(message.relative_uri().path())};
+  cout << endl << "**** DELETE " << path << endl;
+  message.reply(status_codes::BadRequest);
+  return;
+}
+
 /*
   Main authentication server routine
 
@@ -73,7 +94,7 @@ void handle_post(http_request message) {
   which processes each request asynchronously.
 
   Note that, unlike BasicServer, PushServer only
-  installs the listeners for GET. Any other HTTP
+  installs the listeners for POST. Any other HTTP
   method will produce a Method Not Allowed (405)
   response.
 
@@ -88,10 +109,10 @@ int main (int argc, char const * argv[]) {
 
   cout << "PushServer: Opening listener" << endl;
   http_listener listener {def_url};
-  //listener.support(methods::GET, &handle_get);
+  listener.support(methods::GET, &handle_get);
   listener.support(methods::POST, &handle_post);
-  //listener.support(methods::PUT, &handle_put);
-  //listener.support(methods::DEL, &handle_delete);
+  listener.support(methods::PUT, &handle_put);
+  listener.support(methods::DEL, &handle_delete);
   listener.open().wait(); // Wait for listener to complete starting
 
   cout << "Enter carriage return to stop PushServer." << endl;

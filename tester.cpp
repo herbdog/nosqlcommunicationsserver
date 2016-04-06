@@ -1230,7 +1230,6 @@ public:
   static constexpr const char* updates {"Updates"};
   static constexpr const char* updates_val {"Status Updates\n"};
 
-
 public:
   UserFixture() {
     int make_result {create_table(addr, table)};
@@ -1277,47 +1276,9 @@ public:
   }
 };
 
-SUITE(GET_USER) {
-  TEST_FIXTURE(UserFixture, GetUser) {
-    cout << ">> GetUser Test" << endl;
-
-    pair<status_code, value> result {
-      do_request (methods::GET,
-                  string(UserFixture::user_addr)
-                  + read_friend_list + "/"
-                  + userid) //Gary
-    };
-
-    cout << result.first << endl; 
-
-    /* Example code for reference
-
-    cout << "Requesting token" << endl;
-    pair<status_code,string> token_res {
-      get_update_token(AuthFixture::auth_addr,
-                       AuthFixture::userid,
-                       AuthFixture::user_pwd)
-    };
-    cout << "Token response " << token_res.first << endl;
-    CHECK_EQUAL ( status_codes::OK, token_res.first);
-
-    pair<status_code,value> result {
-      do_request (methods::GET,
-                  string(AuthFixture::addr)
-                  + read_entity_auth + "/"
-                  + AuthFixture::table + "/"
-                  + token_res.second + "/"
-                  + AuthFixture::partition + "/"
-                  + AuthFixture::row
-      )
-    };
-    */
-  }
-}
-
-SUITE(POST_USER) {
+SUITE(USER) {
   TEST_FIXTURE(UserFixture, SignOn) {
-    cout << "SignOn Test" << endl;
+    cout << ">> SignOn Test" << endl;
 
     pair<status_code, value> result {
       do_request (methods::POST,
@@ -1342,7 +1303,35 @@ SUITE(POST_USER) {
     };
     CHECK_EQUAL(status_codes::NotFound, result2.first);
 
+    //Wrong property
+    cout << "Edge SignOn2" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("WrongProperty",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result3.first);
+  }
 
+  TEST_FIXTURE(UserFixture, GetUser) {
+    cout << ">> GetUser Test" << endl;
+
+    pair<status_code, value> result {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + read_friend_list + "/"
+                  + userid) //Gary
+    };
+    CHECK_EQUAL(result.first, status_codes::OK);
+    CHECK_EQUAL(string("{\"") 
+                + friends + "\":\""
+                + friends_val + "\"}", 
+                result.second.serialize()
+    );
   }
 
   TEST_FIXTURE(UserFixture, SignOff) {

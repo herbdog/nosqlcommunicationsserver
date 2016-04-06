@@ -40,6 +40,7 @@ using std::unordered_map;
 using std::vector;
 using std::make_tuple;
 using std::tuple;
+using std::get;
 
 using web::http::http_headers;
 using web::http::http_request;
@@ -158,6 +159,52 @@ void handle_get(http_request message) {
     return;
   }
 
+  if (paths[0] == read_friend_list) {
+    string uid = paths[1];
+
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          cout << "userid was valid" << endl;
+          string token = get<0>(it->second);
+          string partition = get<1>(it->second);
+          string row = get<2>(it->second);
+
+          pair<status_code,value> result {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_auth + "/"
+                      + data_table_name + "/"
+                      + token + "/"
+                      + partition + "/"
+                      + row)
+          };
+          if (result.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+
+          string friendslist = get_json_object_prop(result.second, "Friends");
+          value body = build_json_value("Friends", friendslist);
+
+          message.reply(status_codes::OK, body);
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
+      //uid did not have an active session
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+    else {
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+
+  }
+
   message.reply(status_codes::BadRequest);
   return;
 }
@@ -272,9 +319,6 @@ void handle_post(http_request message) {
     message.reply(status_codes::NotFound);
     return;
   }
-
-  message.reply(status_codes::BadRequest);
-  return;
 }
 
 /*
@@ -285,6 +329,12 @@ void handle_put(http_request message) {
   cout << endl << "**** PUT " << path << endl;
 }
 
+void handle_delete(http_request message) {
+  string path {uri::decode(message.relative_uri().path())};
+  cout << endl << "**** DELETE " << path << endl;
+  message.reply(status_codes::BadRequest);
+  return;
+}
 
 /*
   Main authentication server routine
@@ -293,7 +343,7 @@ void handle_put(http_request message) {
   which processes each request asynchronously.
 
   Note that, unlike BasicServer, UserServer only
-  installs the listeners for GET. Any other HTTP
+  installs the listeners for GET, PUT and POST. Any other HTTP
   method will produce a Method Not Allowed (405)
   response.
 
@@ -311,7 +361,7 @@ int main (int argc, char const * argv[]) {
   listener.support(methods::GET, &handle_get);
   listener.support(methods::POST, &handle_post);
   listener.support(methods::PUT, &handle_put);
-  //listener.support(methods::DEL, &handle_delete);
+  listener.support(methods::DEL, &handle_delete);
   listener.open().wait(); // Wait for listener to complete starting
 
   cout << "Enter carriage return to stop UserServer." << endl;
