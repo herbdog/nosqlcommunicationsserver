@@ -15,6 +15,7 @@
 
 #include "TableCache.h"
 #include "make_unique.h"
+#include "ClientUtils.h"
 
 #include "azure_keys.h"
 
@@ -63,6 +64,7 @@ const string data_table_name {"DataTable"};
 
 const string get_read_token_op {"GetReadToken"};
 const string get_update_token_op {"GetUpdateToken"};
+const string get_update_data_op {"GetUpdateData"};
 
 /*
   Cache of opened tables
@@ -225,7 +227,7 @@ void handle_get(http_request message) {
   string row {std::get<1>(values[1])};
 
   uint8_t permission {};
-  if (get_update_token_op == paths[0]) {
+  if (get_update_token_op == paths[0] || get_update_data_op == paths[0]) {
     permission = table_shared_access_policy::permissions::read |
       table_shared_access_policy::permissions::update;
   }
@@ -245,17 +247,27 @@ void handle_get(http_request message) {
     )
   };
 
-  value v {value::string(token.second)};
- 
- 
-  cout << "HTTP code: " << token.first << endl;  
-  if (token.first == status_codes::OK) {
-    message.reply(status_codes::OK, v);
+  if (paths[0] == get_update_data_op) {
+    message.reply(status_codes::OK, value::object(vector<pair<string,value>> {
+      make_pair ("token", value::string (token.second)),
+      make_pair ("DataPartition", value::string (partition)),
+      make_pair ("DataRow", value::string (row))
+    }));
     return;
   }
   else {
-    message.reply(status_codes::NotFound);
-    return;
+    value v {value::string(token.second)};
+   
+   
+    cout << "HTTP code: " << token.first << endl;  
+    if (token.first == status_codes::OK) {
+      message.reply(status_codes::OK, v);
+      return;
+    }
+    else {
+      message.reply(status_codes::NotFound);
+      return;
+    }
   }
   //message.reply(status_codes::NotImplemented);
 }
