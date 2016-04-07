@@ -40,6 +40,7 @@ using std::unordered_map;
 using std::vector;
 using std::make_tuple;
 using std::tuple;
+using std::get;
 
 using web::http::http_headers;
 using web::http::http_request;
@@ -61,7 +62,7 @@ const string addr {"http://localhost:34568/"};
 const string sign_on {"SignOn"};
 const string sign_off {"SignOff"};
 const string add_friend {"AddFriend"};
-const string unfriend {"UnFriend"};
+const string un_friend {"UnFriend"};
 const string update_status {"UpdateStatus"};
 const string read_friend_list {"ReadFriendList"};
 
@@ -75,12 +76,32 @@ const string get_update_data_op {"GetUpdateData"};
 const string get_read_token_op {"GetReadToken"};
 const string get_update_token_op {"GetUpdateToken"};
 
+const string read_entity_admin {"ReadEntityAdmin"};
+const string delete_entity_admin {"DeleteEntityAdmin"};
+const string update_entity_admin {"UpdateEntityAdmin"};
+
 const string read_entity_auth {"ReadEntityAuth"};
 const string update_entity_auth {"UpdateEntityAuth"};
 
 //records  users who are signed in
 unordered_map<string,tuple<string,string,string>> session;
 
+int del_entity (const string& addr, const string& table, const string& partition, const string& row)  {
+  // SIGH--Note that REST SDK uses "methods::DEL", not "methods::DELETE"
+  pair<status_code,value> result {
+    do_request (methods::DEL,
+                addr + delete_entity_admin + "/" + table + "/" + partition + "/" + row)};
+  return result.first;
+}
+
+int put_entity(const string& addr, const string& table, const string& partition, const string& row,
+              const vector<pair<string,value>>& props) {
+  pair<status_code,value> result {
+    do_request (methods::PUT,
+               addr + update_entity_admin + "/" + table + "/" + partition + "/" + row,
+               value::object (props))};
+  return result.first;
+}
 
 /*
   Given an HTTP message with a JSON body, return the JSON
@@ -152,10 +173,62 @@ void handle_get(http_request message) {
   cout << endl << "**** GET " << path << endl;
   auto paths = uri::split_path(path);
 
-  //No userid
-  if (paths.size() < 2) {
-    message.reply(status_codes::NotFound);
+  //No operation
+  if (paths.size() < 1) {
+    message.reply(status_codes::BadRequest);
     return;
+  }
+
+  if (paths[0] == read_friend_list) {
+    //No userid
+    if (paths.size() < 2) {
+      message.reply(status_codes::NotFound);
+      return;
+    }
+    string uid = paths[1];
+
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          cout << "userid was valid" << endl;
+          string token = get<0>(it->second);
+          string partition = get<1>(it->second);
+          string row = get<2>(it->second);
+
+          //Entity is returned
+          pair<status_code,value> result {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_auth + "/"
+                      + data_table_name + "/"
+                      + token + "/"
+                      + partition + "/"
+                      + row)
+          };
+          if (result.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+
+          string friendslist = get_json_object_prop(result.second, "Friends");
+          value body = build_json_value("Friends", friendslist);
+
+          message.reply(status_codes::OK, body);
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
+      //uid did not have an active session
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+    else {
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+
   }
 
   message.reply(status_codes::BadRequest);
@@ -202,6 +275,20 @@ void handle_post(http_request message) {
       message.reply(status_codes::NotFound);
       cout << "SignOn unsuccessful" << endl;
       return;
+    }
+
+    //Checks to see if already signed on
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          message.reply(status_codes::OK);
+          cout << "Already signed in" << endl;
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
     }
 
     string DataRow_val = get_json_object_prop(token_res.second, "DataRow");
@@ -255,12 +342,9 @@ void handle_post(http_request message) {
     return;
   }
   else {
-    message.reply(status_codes::NotFound);
+    message.reply(status_codes::BadRequest);
     return;
   }
-
-  message.reply(status_codes::BadRequest);
-  return;
 }
 
 /*
@@ -269,8 +353,133 @@ void handle_post(http_request message) {
 void handle_put(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** PUT " << path << endl;
+  auto paths = uri::split_path(path);
+
+  //no op, userid, and status/friend info
+  if (paths.size() < 3) {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
+
+  string uid = paths[1];
+
+  if (paths[0] == add_friend) {
+    //add friend code
+    if (paths.size() < 4) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+
+    string add_country = paths[2];
+    string add_name = paths[3];
+
+    //checks to see if userid has a session
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          cout << "userid was valid" << endl;
+          string token = get<0>(it->second);
+          string partition = get<1>(it->second);
+          string row = get<2>(it->second);
+
+          pair<status_code,value> get_entity {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_auth + "/"
+                      + data_table_name + "/"
+                      + token + "/"
+                      + partition + "/"
+                      + row)
+          };
+          if (get_entity.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+          
+          string friendslist = get_json_object_prop(get_entity.second, "Friends");
+          friends_list_t friendslist_vec = parse_friends_list(friendslist);
+
+          //if already in friends list
+          for (int i = 0; i < friendslist_vec.size(); i++) {
+            if (friendslist_vec[i].first == add_country &&
+                friendslist_vec[i].second == add_name) {
+              message.reply(status_codes::OK);
+              return;
+            }
+          }
+
+          friendslist_vec.push_back(make_pair(add_country, add_name));
+          friendslist = friends_list_to_string(friendslist_vec);
+
+          vector<pair<string,value>> v {
+            make_pair("Friends", value::string(friendslist)),
+            make_pair("Status", value::string(get_json_object_prop(get_entity.second, "Status"))),
+            make_pair("Updates", value::string(get_json_object_prop(get_entity.second, "Updates")))
+          };
+
+          value val = build_json_value("Friends", friendslist);
+
+          pair<status_code,value> merge_friend {
+            do_request (methods::PUT,
+              string(addr)
+              + update_entity_auth + "/"
+              + data_table_name + "/"
+              + token + "/"
+              + partition + "/"
+              + row,
+              val)
+          };
+          if (merge_friend.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+        
+          message.reply(status_codes::OK);
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
+      //uid did not have an active session
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+    else {
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+
+    return;
+  }
+  else if (paths[0] == un_friend) {
+    //unfriend code
+    if (paths.size() < 4) {
+      message.reply(status_codes::BadRequest);
+      return;
+    }
+
+    return;
+  }
+  else if (paths[0] == update_status) {
+    //status update code - needs push server to be
+    //completed
+
+    return;
+  }
+  else {
+    message.reply(status_codes::BadRequest);
+    return;
+  }
+
+
 }
 
+void handle_delete(http_request message) {
+  string path {uri::decode(message.relative_uri().path())};
+  cout << endl << "**** DELETE " << path << endl;
+
+}
 
 /*
   Main authentication server routine
@@ -279,7 +488,7 @@ void handle_put(http_request message) {
   which processes each request asynchronously.
 
   Note that, unlike BasicServer, UserServer only
-  installs the listeners for GET. Any other HTTP
+  installs the listeners for GET, PUT and POST. Any other HTTP
   method will produce a Method Not Allowed (405)
   response.
 
