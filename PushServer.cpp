@@ -57,6 +57,42 @@ using web::http::experimental::listener::http_listener;
 using prop_str_vals_t = vector<pair<string,string>>;
 
 constexpr const char* def_url = "http://localhost:34574";
+const string addr {"http://localhost:34568/"};
+
+const string data_table_name {"DataTable"};
+const string read_entity_admin {"ReadEntityAdmin"};
+const string update_entity_admin {"UpdateEntityAdmin"};
+const string push_status {"PushStatus"};
+
+unordered_map<string,string> get_json_body(http_request message) {  
+  unordered_map<string,string> results {};
+  const http_headers& headers {message.headers()};
+  auto content_type (headers.find("Content-Type"));
+  if (content_type == headers.end() ||
+      content_type->second != "application/json")
+    return results;
+
+  value json{};
+  message.extract_json(true)
+    .then([&json](value v) -> bool
+    {
+            json = v;
+      return true;
+    })
+    .wait();
+
+  if (json.is_object()) {
+    for (const auto& v : json.as_object()) {
+      if (v.second.is_string()) {
+  results[v.first] = v.second.as_string();
+      }
+      else {
+  results[v.first] = v.second.serialize();
+      }
+    }
+  }
+  return results;
+}
 
 /*
   Top-level routine for processing all HTTP POST requests.
@@ -64,6 +100,58 @@ constexpr const char* def_url = "http://localhost:34574";
 void handle_post(http_request message) {
   string path {uri::decode(message.relative_uri().path())};
   cout << endl << "**** POST " << path << endl;
+  auto paths = uri::split_path(path);
+  
+  unordered_map<string,string> json_body {get_json_body(message)};
+  
+  if (paths[0] == push_status) {
+	if (paths.size() < 4) {
+	  message.reply(status_codes::BadRequest);
+	  return;
+	}
+	
+	string friendslist {json_body.at("Updates")};
+    friends_list_t friendslist_vec = parse_friends_list(friendslist);
+	
+	for (int i = 0; i < friendslist_vec.size(); i++) {
+		pair<status_code,value> get_entity {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_admin + "/"
+                      + data_table_name + "/"
+                      + friendslist_vec[i].first + "/"
+                      + friendslist_vec[i].second)
+          };
+        if (get_entity.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+        }
+		
+		string updatelist = get_json_object_prop(get_entity.second, "Updates");
+		updatelist.append(paths[3]);
+		updatelist.append("\n");
+		
+		value val = build_json_value("Updates", updatelist);
+		
+		pair<status_code,value> update_entity {
+            do_request(methods::PUT,
+                      string(addr)
+                      + update_entity_admin + "/"
+                      + data_table_name + "/"
+                      + friendslist_vec[i].first + "/"
+                      + friendslist_vec[i].second,
+					  val)
+          };
+	}
+	
+	message.reply(status_codes::OK); //went through all friends of this user and updated their updatelist
+	return;
+ }
+ else {
+	 message.reply(status_codes::BadRequest);
+	 return;
+ }
+ 
 }
 
 void handle_get(http_request message) {

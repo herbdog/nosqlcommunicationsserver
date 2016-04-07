@@ -57,6 +57,7 @@ using prop_str_vals_t = vector<pair<string,string>>;
 
 constexpr const char* def_url = "http://localhost:34572";
 const string auth_addr {"http://localhost:34570/"};
+const string push_addr {"http://localhost:34574"};
 const string addr {"http://localhost:34568/"};
 
 const string sign_on {"SignOn"};
@@ -449,13 +450,92 @@ void handle_put(http_request message) {
       message.reply(status_codes::Forbidden);
       return;
     }
-
-    return;
+	
+	
+  return;
   }
   else if (paths[0] == un_friend) {
     //unfriend code
     if (paths.size() < 4) {
       message.reply(status_codes::BadRequest);
+      return;
+    }
+	
+	string rm_country = paths[2];
+	string rm_name = paths[3];
+	
+	//checks to see if userid has a session
+    if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          cout << "userid was valid" << endl;
+          string token = get<0>(it->second);
+          string partition = get<1>(it->second);
+          string row = get<2>(it->second);
+
+          pair<status_code,value> get_entity {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_auth + "/"
+                      + data_table_name + "/"
+                      + token + "/"
+                      + partition + "/"
+                      + row)
+          };
+          if (get_entity.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+          
+          string friendslist = get_json_object_prop(get_entity.second, "Friends");
+          friends_list_t friendslist_vec = parse_friends_list(friendslist);
+
+          //if already in friends list
+          for (int i = 0; i < friendslist_vec.size(); i++) {
+            if (friendslist_vec[i].first == rm_country &&
+                friendslist_vec[i].second == rm_name) {
+			  friendslist_vec.erase(friendslist_vec.begin() + i); //removes the friend from friend list
+              message.reply(status_codes::OK);
+			  break;
+            }
+          }
+
+          vector<pair<string,value>> v {
+            make_pair("Friends", value::string(friendslist)),
+            make_pair("Status", value::string(get_json_object_prop(get_entity.second, "Status"))),
+            make_pair("Updates", value::string(get_json_object_prop(get_entity.second, "Updates")))
+          };
+
+          value val = build_json_value("Friends", friendslist);
+
+          pair<status_code,value> delete_friend {
+            do_request (methods::PUT,
+              string(addr)
+              + update_entity_auth + "/"
+              + data_table_name + "/"
+              + token + "/"
+              + partition + "/"
+              + row,
+              val)
+          };
+          if (delete_friend.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+        
+          message.reply(status_codes::OK);
+          return;
+        }
+        else {
+          ++it;
+        }
+      }
+      //uid did not have an active session
+      message.reply(status_codes::Forbidden);
+      return;
+    }
+    else {
+      message.reply(status_codes::Forbidden);
       return;
     }
 

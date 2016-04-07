@@ -1421,6 +1421,63 @@ SUITE(USER) {
     };
     CHECK_EQUAL(status_codes::Forbidden, result2.first);
 
+	cout << ">> UnFriend Test" << endl;
+	
+	//Remove Bob Ross from Franklin's friends list
+    pair<status_code, value> result1 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + unfriend + "/"
+        + userid + "/"
+        + part_country + "/"
+        + row_name)
+    };
+	CHECK_EQUAL(status_codes::OK, result.first);
+	
+    CHECK_EQUAL(status_codes::OK, result.first);
+	    pair<status_code, value> get_friends1 {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + read_friend_list + "/"
+                  + userid) //Gary
+    };
+    CHECK_EQUAL(status_codes::OK, get_friends.first);
+	
+    CHECK_EQUAL(string("{\"") + friends + "\":\""
+                + friends_val + "|"
+                + part_country + ";"
+                + row_name + "\"}",
+                get_friends1.second.serialize());
+
+				
+    //user is not logged in
+    cout << "Edge UnFriend1" << endl;
+    pair<status_code, value> result1_2 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + unfriend + "/"
+        + "NotLoggedIn" + "/"
+        + part_country + "/"
+        + row_name)
+    };
+	CHECK_EQUAL(status_codes::Forbidden, result2.first);
+	
+	string part_country1 {"CN"};
+    string row_name1 {"Nimoy,Leonard"};
+    string pass1 = "Nimoy";
+    string uid1 = "Leonard";
+	//unfriending someone not on their friends list
+	cout << "Edge UnFriend2" << endl;
+	pair<status_code, value> result1_3 {
+		do_request(methods::PUT,
+		string(UserFixture::user_addr)
+		+ unfriend + "/"
+		+ userid + "/"
+        + part_country1 + "/"
+        + row_name1)
+	};
+	CHECK_EQUAL(status_codes::OK, get_friends.first);
+	
   }
 
   TEST_FIXTURE(UserFixture, SignOff) {
