@@ -1434,6 +1434,19 @@ SUITE(USER) {
     };
 	CHECK_EQUAL(status_codes::OK, result.first);
 	
+	cout << ">> UpdateStatus Test" << endl;
+	  
+	string status {"NewStatus!"};
+	  
+	pair<status_code, value> resultst {
+    do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + update_status + "/"
+        + userid + "/"
+        + status)
+    };
+    CHECK_EQUAL(status_codes::OK, result.first);
+	
     CHECK_EQUAL(status_codes::OK, result.first);
 	    pair<status_code, value> get_friends1 {
       do_request (methods::GET,

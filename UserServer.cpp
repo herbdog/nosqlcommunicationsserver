@@ -57,7 +57,7 @@ using prop_str_vals_t = vector<pair<string,string>>;
 
 constexpr const char* def_url = "http://localhost:34572";
 const string auth_addr {"http://localhost:34570/"};
-const string push_addr {"http://localhost:34574"};
+const string push_addr {"http://localhost:34574/"};
 const string addr {"http://localhost:34568/"};
 
 const string sign_on {"SignOn"};
@@ -65,6 +65,7 @@ const string sign_off {"SignOff"};
 const string add_friend {"AddFriend"};
 const string un_friend {"UnFriend"};
 const string update_status {"UpdateStatus"};
+const string push_status {"PushStatus"};
 const string read_friend_list {"ReadFriendList"};
 
 const string data_table_name {"DataTable"};
@@ -568,30 +569,48 @@ void handle_put(http_request message) {
             return;
           }
 		  
-		  value val = build_json_value("Status", paths[2]);
-		  try {
-			pair<status_code, value> statusupdate { 
-		      do_request (methods::PUT,
+		  value val1 = build_json_value("Status", paths[2]);
+		  
+		  pair<status_code, value> statusupdate1 {
+			do_request (methods::PUT,
 				  string(addr)
 				  + update_entity_auth + "/"
-				  + data_table_name + "/"
-				  + token + "/"
-				  + partition + "/"
-				  + row,
-				  val)
+                  + data_table_name + "/"
+                  + token + "/"
+                  + partition + "/"
+                  + row,
+				  val1)
 		    };  
-			if (statusupdate.first != status_codes::OK) {
+		   if (statusupdate1.first != status_codes::OK) {
 			  message.reply(status_codes::NotFound);
 			  return;
 		    }
 		  
-		    message.reply(status_codes::OK);
-		    return;
+		  string friendslist = get_json_object_prop(get_entity.second, "Friends");
+		  value val = build_json_value("Friends", friendslist);
+		  
+		  pair<status_code, value> statusupdate {};
+		  try {
+			  statusupdate = 
+		      do_request (methods::POST,
+				  string(push_addr)
+				  + push_status + "/"
+				  + partition + "/"
+				  + uid + "/"
+				  + paths[2],
+				  val);
 		  }
 		  catch (const web::uri_exception& e) {
 			  message.reply(status_codes::ServiceUnavailable);
 			  return;
 		  }
+		  if (statusupdate.first != status_codes::OK) {
+			  message.reply (statusupdate.first);
+			  return;
+		  }
+		  
+		  message.reply(status_codes::OK);
+		  return;
 		}
 		else {
           ++it;

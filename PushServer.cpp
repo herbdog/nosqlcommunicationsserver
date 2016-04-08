@@ -110,7 +110,7 @@ void handle_post(http_request message) {
 	  return;
 	}
 	
-	string friendslist {json_body.at("Updates")};
+	string friendslist {json_body.at("Friends")};
     friends_list_t friendslist_vec = parse_friends_list(friendslist);
 	
 	for (int i = 0; i < friendslist_vec.size(); i++) {
@@ -121,7 +121,7 @@ void handle_post(http_request message) {
                       + data_table_name + "/"
                       + friendslist_vec[i].first + "/"
                       + friendslist_vec[i].second)
-          };
+        };
         if (get_entity.first != status_codes::OK) {
             message.reply(status_codes::NotFound);
             return;
@@ -141,7 +141,7 @@ void handle_post(http_request message) {
                       + friendslist_vec[i].first + "/"
                       + friendslist_vec[i].second,
 					  val)
-          };
+        };
 	}
 	
 	message.reply(status_codes::OK); //went through all friends of this user and updated their updatelist
