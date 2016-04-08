@@ -184,7 +184,7 @@ void handle_get(http_request message) {
   if (paths[0] == read_friend_list) {
     //No userid
     if (paths.size() < 2) {
-      message.reply(status_codes::NotFound);
+      message.reply(status_codes::BadRequest);
       return;
     }
     string uid = paths[1];
@@ -413,12 +413,6 @@ void handle_put(http_request message) {
           friendslist_vec.push_back(make_pair(add_country, add_name));
           friendslist = friends_list_to_string(friendslist_vec);
 
-          vector<pair<string,value>> v {
-            make_pair("Friends", value::string(friendslist)),
-            make_pair("Status", value::string(get_json_object_prop(get_entity.second, "Status"))),
-            make_pair("Updates", value::string(get_json_object_prop(get_entity.second, "Updates")))
-          };
-
           value val = build_json_value("Friends", friendslist);
 
           pair<status_code,value> merge_friend {
@@ -452,8 +446,7 @@ void handle_put(http_request message) {
       return;
     }
 	
-	
-  return;
+    return;
   }
   else if (paths[0] == un_friend) {
     //unfriend code
@@ -461,11 +454,10 @@ void handle_put(http_request message) {
       message.reply(status_codes::BadRequest);
       return;
     }
+	  string rm_country = paths[2];
+	  string rm_name = paths[3];
 	
-	string rm_country = paths[2];
-	string rm_name = paths[3];
-	
-	//checks to see if userid has a session
+	 //checks to see if userid has a session
     if (session.size() > 0) {
       for (auto it = session.begin(); it != session.end();) {
         if (it->first == uid) {
@@ -491,22 +483,17 @@ void handle_put(http_request message) {
           string friendslist = get_json_object_prop(get_entity.second, "Friends");
           friends_list_t friendslist_vec = parse_friends_list(friendslist);
 
-          //if already in friends list
+          //if in friend's list, delete
+          //if not, nothing happens 
           for (int i = 0; i < friendslist_vec.size(); i++) {
             if (friendslist_vec[i].first == rm_country &&
                 friendslist_vec[i].second == rm_name) {
-			  friendslist_vec.erase(friendslist_vec.begin() + i); //removes the friend from friend list
-              message.reply(status_codes::OK);
-			  break;
+			        friendslist_vec.erase(friendslist_vec.begin() + i); //removes the friend from friend list
+			        break;
             }
-          }
+          } 
 
-          vector<pair<string,value>> v {
-            make_pair("Friends", value::string(friendslist)),
-            make_pair("Status", value::string(get_json_object_prop(get_entity.second, "Status"))),
-            make_pair("Updates", value::string(get_json_object_prop(get_entity.second, "Updates")))
-          };
-
+          friendslist = friends_list_to_string(friendslist_vec);
           value val = build_json_value("Friends", friendslist);
 
           pair<status_code,value> delete_friend {
@@ -543,19 +530,15 @@ void handle_put(http_request message) {
     return;
   }
   else if (paths[0] == update_status) {  //status update code
-	if (paths.size() < 3) {
-		message.reply(status_codes::BadRequest);
-		return;
-	}
-	if (session.size() > 0) {
+  	if (session.size() > 0) {
       for (auto it = session.begin(); it != session.end();) {
         if (it->first == uid) {
           cout << "userid was valid" << endl;
           string token = get<0>(it->second);
           string partition = get<1>(it->second);
           string row = get<2>(it->second);
-		  
-		  pair<status_code,value> get_entity {
+  		  
+  		    pair<status_code,value> get_entity {
             do_request(methods::GET,
                       string(addr)
                       + read_entity_auth + "/"
@@ -565,63 +548,65 @@ void handle_put(http_request message) {
                       + row)
           };
           if (get_entity.first != status_codes::OK) {
-            message.reply(status_codes::NotFound);
-            return;
+              message.reply(status_codes::NotFound);
+              return;
           }
-		  
-		  value val1 = build_json_value("Status", paths[2]);
-		  
-		  pair<status_code, value> statusupdate1 {
-			do_request (methods::PUT,
-				  string(addr)
-				  + update_entity_auth + "/"
-                  + data_table_name + "/"
-                  + token + "/"
-                  + partition + "/"
-                  + row,
-				  val1)
-		    };  
-		   if (statusupdate1.first != status_codes::OK) {
-			  message.reply(status_codes::NotFound);
-			  return;
-		    }
-		  
-		  string friendslist = get_json_object_prop(get_entity.second, "Friends");
-		  value val = build_json_value("Friends", friendslist);
-		  
-		  pair<status_code, value> statusupdate {};
-		  try {
-			  statusupdate = 
-		      do_request (methods::POST,
-				  string(push_addr)
-				  + push_status + "/"
-				  + partition + "/"
-				  + uid + "/"
-				  + paths[2],
-				  val);
-		  }
-		  catch (const web::uri_exception& e) {
-			  message.reply(status_codes::ServiceUnavailable);
-			  return;
-		  }
-		  if (statusupdate.first != status_codes::OK) {
-			  message.reply (statusupdate.first);
-			  return;
-		  }
-		  
-		  message.reply(status_codes::OK);
-		  return;
-		}
-		else {
-          ++it;
+  		  
+    		  value val = build_json_value("Status", paths[2]);
+
+    		  string friendslist = get_json_object_prop(get_entity.second, "Friends");
+          value flist = build_json_value("Friends", friendslist);
+
+      		pair<status_code, value> statusupdate { 
+    		    do_request (methods::PUT,
+    			             string(addr)
+    				           + update_entity_auth + "/"
+            				   + data_table_name + "/"
+            				   + token + "/"
+            				   + partition + "/"
+            				   + row,
+            				   val)
+    		  };  
+    			if (statusupdate.first != status_codes::OK) {
+      		  message.reply(status_codes::NotFound);
+      		  return;
+      		}
+          cout << "updating friends" << endl;
+    		  try {
+            //pushserver code
+            pair<status_code, value> statusupdate { 
+              do_request (methods::POST,
+                          string(push_addr)
+                          + push_status + "/"
+                          + partition + "/"
+                          + uid + "/"
+                          + paths[2],
+                          flist)
+            };  
+            if (statusupdate.first != status_codes::OK) {
+              message.reply(status_codes::NotFound);
+              return;
+            }
+            
+            message.reply(status_codes::OK);
+            return;
+            
+          }
+    		  catch (const web::uri_exception& e) {
+    			  message.reply(status_codes::ServiceUnavailable);
+    			  return;
+    		  }
+    		}
+  		  else {
+           ++it;
         }
       }
-	  message.reply(status_codes::Forbidden);
-      return;
-	}
-	else {
-      message.reply(status_codes::Forbidden);
-      return;
+  	  message.reply(status_codes::Forbidden);
+        return;
+  	}
+  	else {
+        message.reply(status_codes::Forbidden);
+        return;
     }
   }
   else {

@@ -105,53 +105,53 @@ void handle_post(http_request message) {
   unordered_map<string,string> json_body {get_json_body(message)};
   
   if (paths[0] == push_status) {
-	if (paths.size() < 4) {
+  	if (paths.size() < 4) {
+  	  message.reply(status_codes::BadRequest);
+  	  return;
+  	}
+  	
+  	string friendslist {json_body["Friends"]};
+    friends_list_t friendslist_vec = parse_friends_list(friendslist);
+  	
+  	for (int i = 0; i < friendslist_vec.size(); i++) {
+      cout << "Updating " + friendslist_vec[i].first + "/"
+              + friendslist_vec[i].second << endl;
+
+  		pair<status_code,value> get_entity {
+        do_request(methods::GET,
+                  string(addr)
+                  + read_entity_admin + "/"
+                  + data_table_name + "/"
+                  + friendslist_vec[i].first + "/"
+                  + friendslist_vec[i].second)
+      };
+  		
+  		string updatelist = get_json_object_prop(get_entity.second, "Updates");
+  		updatelist.append(paths[3]);
+  		updatelist.append("\n");
+
+      cout << "New Status: " + updatelist << endl;
+  		
+  		value val = build_json_value("Updates", updatelist);
+  		
+  		pair<status_code,value> update_entity {
+        do_request(methods::PUT,
+                  string(addr)
+                  + update_entity_admin + "/"
+                  + data_table_name + "/"
+                  + friendslist_vec[i].first + "/"
+                  + friendslist_vec[i].second,
+			            val)
+      };
+  	}
+	
+  	message.reply(status_codes::OK); //went through all friends of this user and updated their updatelist
+  	return;
+  }
+  else {
 	  message.reply(status_codes::BadRequest);
 	  return;
-	}
-	
-	string friendslist {json_body.at("Friends")};
-    friends_list_t friendslist_vec = parse_friends_list(friendslist);
-	
-	for (int i = 0; i < friendslist_vec.size(); i++) {
-		pair<status_code,value> get_entity {
-            do_request(methods::GET,
-                      string(addr)
-                      + read_entity_admin + "/"
-                      + data_table_name + "/"
-                      + friendslist_vec[i].first + "/"
-                      + friendslist_vec[i].second)
-        };
-        if (get_entity.first != status_codes::OK) {
-            message.reply(status_codes::NotFound);
-            return;
-        }
-		
-		string updatelist = get_json_object_prop(get_entity.second, "Updates");
-		updatelist.append(paths[3]);
-		updatelist.append("\n");
-		
-		value val = build_json_value("Updates", updatelist);
-		
-		pair<status_code,value> update_entity {
-            do_request(methods::PUT,
-                      string(addr)
-                      + update_entity_admin + "/"
-                      + data_table_name + "/"
-                      + friendslist_vec[i].first + "/"
-                      + friendslist_vec[i].second,
-					  val)
-        };
-	}
-	
-	message.reply(status_codes::OK); //went through all friends of this user and updated their updatelist
-	return;
- }
- else {
-	 message.reply(status_codes::BadRequest);
-	 return;
- }
- 
+  }
 }
 
 void handle_get(http_request message) {
