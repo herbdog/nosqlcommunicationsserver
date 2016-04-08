@@ -683,6 +683,18 @@ SUITE(GET) {
       };
       CHECK_EQUAL(status_codes::NotFound, result7.first);
 
+      //Wrong table, partition, and row
+      cout << "Edge Partition 8" << endl;
+      pair<status_code, value> result8 {
+        do_request (methods::GET,
+          string(BasicFixture::addr)
+          + read_entity_admin + "/"
+          + "NotATable" + "/"
+          + "NotA,Partition" + "/"
+          + "NotA,Row")
+      };
+      CHECK_EQUAL(status_codes::NotFound, result8.first);
+
       CHECK_EQUAL(status_codes::OK, delete_entity (BasicFixture::addr, BasicFixture::table, partition, row));
    }
 
@@ -861,11 +873,7 @@ public:
     };
 
     // Ensure userid and password in system
-    int user_result {put_entity (addr,
-                                 auth_table,
-                                 auth_table_partition,
-                                 userid,
-                                 v)};
+    int user_result {put_entity (addr, auth_table, auth_table_partition, userid, v)};
     cerr << "user auth table insertion result " << user_result << endl;
     if (user_result != status_codes::OK)
       throw std::exception();
@@ -1203,8 +1211,6 @@ SUITE(AUTH) {
     catch(const storage_exception& e) {
       cout << "Exception occured" << endl;
     }
-
-
   }
 }
 
@@ -1415,6 +1421,144 @@ SUITE(USER) {
     };
     CHECK_EQUAL(status_codes::Forbidden, result2.first);
 
+    /////////////////////////////////////////////////
+	  cout << ">> UnFriend Test" << endl;
+	
+	  //Remove Bob Ross from Franklin's friends list
+      pair<status_code, value> result1 {
+        do_request(methods::PUT,
+          string(UserFixture::user_addr)
+          + unfriend + "/"
+          + userid + "/"
+          + part_country + "/"
+          + row_name)
+    };
+    CHECK_EQUAL(status_codes::OK, result1.first);
+	
+	  pair<status_code, value> get_friends1 {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + read_friend_list + "/"
+                  + userid) //Gary
+    };
+    CHECK_EQUAL(status_codes::OK, get_friends1.first);
+    CHECK_EQUAL(string("{\"") + friends + "\":\""
+                + friends_val + "\"}",
+                get_friends1.second.serialize());
+
+    //user is not logged in
+    cout << "Edge UnFriend1" << endl;
+    pair<status_code, value> result1_2 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + unfriend + "/"
+        + "NotLoggedIn" + "/"
+        + part_country + "/"
+        + row_name)
+    };
+	  CHECK_EQUAL(status_codes::Forbidden, result1_2.first);
+	
+	  string part_country1 {"CN"};
+    string row_name1 {"Nimoy,Leonard"};
+    string pass1 = "Nimoy";
+    string uid1 = "Leonard";
+
+	  //unfriending someone not on their friends list
+	  cout << "Edge UnFriend2" << endl;
+	  pair<status_code, value> result1_3 {
+		  do_request(methods::PUT,
+		            string(UserFixture::user_addr)
+		            + unfriend + "/"
+		            + userid + "/"
+                + part_country1 + "/"
+                + row_name1)
+	  };
+	  CHECK_EQUAL(status_codes::OK, result1_3.first);
+	
+  }
+  
+  TEST_FIXTURE(UserFixture, StatusUpdate) {
+	  cout << ">> UpdateStatus Test" << endl;
+	  
+    //Add Bob to DataTable
+	  string new_status {"NewStatus"};
+    string part_country {"AUS"};
+    string row_name {"Ross,Bob"};
+    string pass = "Ross";
+    string uid = "Bob";
+
+    string friend_val {"USA;Shinoda,Mike"};
+    string stat_val {"You%20Suck"};
+    string update_val {"CurrentlyNothing\n"};
+
+
+    vector<pair<string, value>> v1 {
+      make_pair("Friends", value::string(friend_val)),
+      make_pair("Status", value::string(stat_val)),
+      make_pair("Updates", value::string(update_val))
+    };
+
+    int put_result {put_entity (UserFixture::addr, 
+                                UserFixture::table, 
+                                part_country, 
+                                row_name, 
+                                v1)
+    };
+    cerr << "put result " << put_result << endl;
+    assert (put_result == status_codes::OK); 
+
+    //Add bob to franklin's FL
+    pair<status_code, value> add_bob {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + add_friend + "/"
+        + userid + "/"
+        + part_country + "/"
+        + row_name)
+    };
+    CHECK_EQUAL(status_codes::OK, add_bob.first);
+	  
+    //Update Franklin's status
+	  pair<status_code, value> result {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + update_status + "/"
+        + userid + "/"
+        + new_status)
+    };
+    if (result.first == status_codes::OK){
+      cout << "Status update successful" << endl;
+    }
+    else if (result.first == status_codes::ServiceUnavailable) {
+      cout << "PushServer is down" << endl;
+    }
+    else {
+      cout << "Status Update unsuccessful: " << result.first << endl;
+    }
+  
+    //change to test for Bob's update status
+    pair<status_code, value> get_entities {
+      do_request(methods::GET,
+        string(UserFixture::addr)
+        + read_entity_admin + "/"
+        + table + "/"
+        + part_country + "/"
+        + row_name)
+    };
+
+    CHECK_EQUAL(string("{\"")
+                + friends + "\":\""
+                + friends_val + "\",\""
+                + status + "\":\""
+                + stat_val + "\",\""
+                + updates + "\":\""
+                + "CurrentlyNothing" + "\\n" + new_status + "\\n" + "\"}",
+                get_entities.second.serialize());
+    CHECK_EQUAL(status_codes::OK, delete_entity (UserFixture::addr, 
+                                                UserFixture::table, 
+                                                part_country, 
+                                                row_name));
+    delete_entity(UserFixture::addr, UserFixture::table, "USA", "Shinoda,Mike");
   }
 
   TEST_FIXTURE(UserFixture, SignOff) {
@@ -1453,6 +1597,11 @@ SUITE(USER_RAND) {
 }
 
     /*
+    string part_country {"AUS"};
+    string row_name {"Ross,Bob"};
+    string pass = "Ross";
+    string uid = "Bob";
+
     vector<pair<string, value>> v2 {
       make_pair("Password", value::string(pass)),
       make_pair("DataPartition", value::string(part_country)),
