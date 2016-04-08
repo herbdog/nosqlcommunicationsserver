@@ -541,11 +541,69 @@ void handle_put(http_request message) {
 
     return;
   }
-  else if (paths[0] == update_status) {
-    //status update code - needs push server to be
-    //completed
-
-    return;
+  else if (paths[0] == update_status) {  //status update code
+	if (paths.size() < 3) {
+		message.reply(status_codes::BadRequest);
+		return;
+	}
+	if (session.size() > 0) {
+      for (auto it = session.begin(); it != session.end();) {
+        if (it->first == uid) {
+          cout << "userid was valid" << endl;
+          string token = get<0>(it->second);
+          string partition = get<1>(it->second);
+          string row = get<2>(it->second);
+		  
+		  pair<status_code,value> get_entity {
+            do_request(methods::GET,
+                      string(addr)
+                      + read_entity_auth + "/"
+                      + data_table_name + "/"
+                      + token + "/"
+                      + partition + "/"
+                      + row)
+          };
+          if (get_entity.first != status_codes::OK) {
+            message.reply(status_codes::NotFound);
+            return;
+          }
+		  
+		  value val = build_json_value("Status", paths[2]);
+		  try {
+			pair<status_code, value> statusupdate { 
+		      do_request (methods::PUT,
+				  string(addr)
+				  + update_entity_auth + "/"
+				  + data_table_name + "/"
+				  + token + "/"
+				  + partition + "/"
+				  + row,
+				  val)
+		    };  
+			if (statusupdate.first != status_codes::OK) {
+			  message.reply(status_codes::NotFound);
+			  return;
+		    }
+		  
+		    message.reply(status_codes::OK);
+		    return;
+		  }
+		  catch (const web::uri_exception& e) {
+			  message.reply(status_codes::ServiceUnavailable);
+			  return;
+		  }
+		}
+		else {
+          ++it;
+        }
+      }
+	  message.reply(status_codes::Forbidden);
+      return;
+	}
+	else {
+      message.reply(status_codes::Forbidden);
+      return;
+    }
   }
   else {
     message.reply(status_codes::BadRequest);
