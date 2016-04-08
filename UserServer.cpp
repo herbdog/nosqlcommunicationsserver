@@ -411,12 +411,6 @@ void handle_put(http_request message) {
           friendslist_vec.push_back(make_pair(add_country, add_name));
           friendslist = friends_list_to_string(friendslist_vec);
 
-          vector<pair<string,value>> v {
-            make_pair("Friends", value::string(friendslist)),
-            make_pair("Status", value::string(get_json_object_prop(get_entity.second, "Status"))),
-            make_pair("Updates", value::string(get_json_object_prop(get_entity.second, "Updates")))
-          };
-
           value val = build_json_value("Friends", friendslist);
 
           pair<status_code,value> merge_friend {
