@@ -1479,6 +1479,21 @@ SUITE(USER) {
 	CHECK_EQUAL(status_codes::OK, get_friends.first);
 	
   }
+  
+  TEST_FIXTURE(UserFixture, StatusUpdate) {
+	  cout << ">> UpdateStatus Test" << endl;
+	  
+	  string status {"NewStatus!"};
+	  
+	  pair<status_code, value> result {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + update_status + "/"
+        + userid + "/"
+        + status)
+    };
+    CHECK_EQUAL(status_codes::OK, result.first);
+  }
 
   TEST_FIXTURE(UserFixture, SignOff) {
     cout << ">> SignOff Test" << endl;
