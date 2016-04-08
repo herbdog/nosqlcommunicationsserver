@@ -184,7 +184,7 @@ void handle_get(http_request message) {
   if (paths[0] == read_friend_list) {
     //No userid
     if (paths.size() < 2) {
-      message.reply(status_codes::NotFound);
+      message.reply(status_codes::BadRequest);
       return;
     }
     string uid = paths[1];

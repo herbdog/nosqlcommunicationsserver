@@ -1374,6 +1374,14 @@ SUITE(USER) {
     };
     CHECK_EQUAL(result3.first, status_codes::Forbidden);
 
+    //not enough params
+    cout << "Edge GetUser 3" << endl;
+    pair<status_code, value> param {
+      do_request(methods::GET,
+                string(UserFixture::user_addr)
+                + read_friend_list)
+    };
+    CHECK_EQUAL(status_codes::BadRequest, param.first);
   }
 
   TEST_FIXTURE(UserFixture, AddUnFriend) {
@@ -1410,7 +1418,7 @@ SUITE(USER) {
                 get_friends.second.serialize());
 
     //user is not logged in
-    cout << "Edge AddFriend1" << endl;
+    cout << "Edge AddFriend 1" << endl;
     pair<status_code, value> result2 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
@@ -1420,6 +1428,15 @@ SUITE(USER) {
         + row_name)
     };
     CHECK_EQUAL(status_codes::Forbidden, result2.first);
+
+    //not enough params
+    cout << "Edge AddFriend 2" << endl;
+    pair<status_code,value> param1 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + add_friend)
+    };
+    CHECK_EQUAL(status_codes::BadRequest, param1.first);
 
     /////////////////////////////////////////////////
 	  cout << ">> UnFriend Test" << endl;
@@ -1474,6 +1491,15 @@ SUITE(USER) {
                 + row_name1)
 	  };
 	  CHECK_EQUAL(status_codes::OK, result1_3.first);
+
+    //not enough params
+    cout << "Edge UnFriend 2" << endl;
+    pair<status_code,value> param2 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + unfriend)
+    };
+    CHECK_EQUAL(status_codes::BadRequest, param2.first);
 	
   }
   
@@ -1536,7 +1562,7 @@ SUITE(USER) {
       cout << "Status Update unsuccessful: " << result.first << endl;
     }
   
-    //change to test for Bob's update status
+    //Get Bob
     pair<status_code, value> get_entities {
       do_request(methods::GET,
         string(UserFixture::addr)
@@ -1554,11 +1580,44 @@ SUITE(USER) {
                 + updates + "\":\""
                 + "CurrentlyNothing" + "\\n" + new_status + "\\n" + "\"}",
                 get_entities.second.serialize());
+
+    //malformed request for pushserver
+    cout << "Edge UpdateStatus 1" << endl;
+    pair<status_code, value> mal_req {
+      do_request(methods::PUT,
+                string(UserFixture::user_addr)
+                + "DoSomething" + "/"
+                + userid + "/"
+                + new_status)
+    };
+    CHECK_EQUAL(status_codes::BadRequest, mal_req.first);
+
+    //invalid userid
+    cout << "Edge UpdateStatus 2" << endl;
+    pair<status_code, value> bad_id {
+      do_request(methods::PUT,
+                string(UserFixture::user_addr)
+                + update_status + "/"
+                + "HUEHUEHUE" + "/"
+                + new_status)
+    };
+    CHECK_EQUAL(status_codes::Forbidden, bad_id.first);
+
+    //not enough parameters
+    cout << "Edge UpdateStatus 3" << endl;
+    pair<status_code, value> param {
+      do_request(methods::PUT,
+                string(UserFixture::user_addr)
+                + update_status + "/"
+                + userid)
+    };
+    CHECK_EQUAL(status_codes::BadRequest, param.first);
+
+    CHECK_EQUAL(status_codes::OK, delete_entity(UserFixture::addr, UserFixture::table, "USA", "Shinoda,Mike"));
     CHECK_EQUAL(status_codes::OK, delete_entity (UserFixture::addr, 
                                                 UserFixture::table, 
                                                 part_country, 
                                                 row_name));
-    delete_entity(UserFixture::addr, UserFixture::table, "USA", "Shinoda,Mike");
   }
 
   TEST_FIXTURE(UserFixture, SignOff) {
@@ -1581,66 +1640,25 @@ SUITE(USER) {
                   + sign_off + "/"
                   + "Bleh")
     };
-
     CHECK_EQUAL(status_codes::NotFound, result2.first);
   }
 }
 
+//Checks for disallowed methods
 SUITE(USER_RAND) {
   TEST_FIXTURE(UserFixture, rand) {
     pair<status_code, value> result {
       do_request (methods::DEL,
-        string(UserFixture::user_addr))
+                  string(UserFixture::user_addr))
     };
     CHECK_EQUAL(status_codes::MethodNotAllowed, result.first);
+    
+    pair<status_code, value> result2 {
+      do_request (methods::GET,
+                  string(UserFixture::push_addr))
+    };
+    CHECK_EQUAL(status_codes::MethodNotAllowed, result2.first);
   }
 }
 
-    /*
-    string part_country {"AUS"};
-    string row_name {"Ross,Bob"};
-    string pass = "Ross";
-    string uid = "Bob";
-
-    vector<pair<string, value>> v2 {
-      make_pair("Password", value::string(pass)),
-      make_pair("DataPartition", value::string(part_country)),
-      make_pair("DataRow", value::string(row_name))
-    };
-
-    string friend_val {"USA;Shinoda,Mike"};
-    string stat_val {"You%20Suck"};
-    string update_val {""};
-
-
-    vector<pair<string, value>> v1 {
-      make_pair("Friends", value::string(friend_val)),
-      make_pair("Status", value::string(stat_val)),
-      make_pair("Updates", value::string(update_val))
-    };
-
-    int put_result {put_entity (UserFixture::addr, 
-                                UserFixture::table, 
-                                part_country, 
-                                row_name, 
-                                v1)
-    };
-    cerr << "put result " << put_result << endl;
-    assert (put_result == status_codes::OK); 
-
-    int user_result {put_entity (UserFixture::addr,
-                                 UserFixture::auth_table,
-                                 UserFixture::auth_table_partition,
-                                 uid,
-                                 v2)};
-    cerr << "user auth table insertion result " << user_result << endl;
-    if (user_result != status_codes::OK)
-      throw std::exception();
-    */
-
-     /*
-    CHECK_EQUAL(status_codes::OK, delete_entity (UserFixture::addr, 
-                                                UserFixture::table, 
-                                                part_country, 
-                                                row_name));
-    */
+   
