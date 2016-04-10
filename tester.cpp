@@ -1619,11 +1619,9 @@ SUITE(USER) {
     }
     else if (result.first == status_codes::ServiceUnavailable) {
       cout << "PushServer is down" << endl;
-      return;
     }
     else {
       cout << "Status Update unsuccessful: " << result.first << endl;
-      return;
     }
   
     //Get Bob
