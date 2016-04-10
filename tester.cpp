@@ -1284,21 +1284,22 @@ public:
 
 SUITE(USER) {
   TEST_FIXTURE(UserFixture, SignOn) {
+    //user does not exist
     cout << ">> SignOn Test" << endl;
-
     pair<status_code, value> result {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
-                  + userid,
+                  + "WrongID",
                   value::object (vector<pair<string,value>>
                                    {make_pair("Password",
                                               value::string(user_pwd))}))
-    };                                                     //Stu
+    };
+    CHECK_EQUAL(status_codes::NotFound, result.first);
 
-    //wrong password
+    //user exists, wrong password, not signed in
     cout << "Edge SignOn 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
@@ -1307,11 +1308,50 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string("WrongPassword"))}))
     };
-    CHECK_EQUAL(status_codes::NotFound, result2.first);
+    CHECK_EQUAL(status_codes::NotFound, result1.first);
+
+    //SIGNED IN
+    cout << "Edge SignOn 2" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::OK, result2.first);
+
+    //already signed in, sign in again with correct login
+    cout << "Edge SignOn 3" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::OK, result3.first);
+
+    //already signed in, sign in again with wrong password
+    cout << "Edge SignOn 4" << endl;
+    pair<status_code, value> result4 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string("WrongPassword"))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result4.first);
 
     //Wrong property
-    cout << "Edge SignOn 2" << endl;
-    pair<status_code, value> result3 {
+    cout << "Edge SignOn 5" << endl;
+    pair<status_code, value> result5 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
@@ -1320,12 +1360,12 @@ SUITE(USER) {
                                    {make_pair("WrongProperty",
                                               value::string(user_pwd))}))
     };
-    CHECK_EQUAL(status_codes::NotFound, result3.first);
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
 
     //Wrong operation
     //Also tests for SignOff
-    cout << "Edge SignOn 3" << endl;
-    pair<status_code, value> result4 {
+    cout << "Edge SignOn 6" << endl;
+    pair<status_code, value> result6 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + "sign_up" + "/"
@@ -1334,7 +1374,17 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string(user_pwd))}))
     };
-    CHECK_EQUAL(status_codes::BadRequest, result4.first);
+    CHECK_EQUAL(status_codes::BadRequest, result6.first);
+
+    //not enough parameters
+    cout << "Edge SignOn 7" << endl;
+    pair<status_code, value> result7 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid)
+    };
+    CHECK_EQUAL(status_codes::NotFound, result7.first);
   
   }
 
