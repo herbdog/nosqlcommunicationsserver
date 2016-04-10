@@ -1335,7 +1335,45 @@ SUITE(USER) {
                                               value::string(user_pwd))}))
     };
     CHECK_EQUAL(status_codes::BadRequest, result4.first);
+
+    //user does not exist
+    cout << "Edge SignOn 4" << endl;
+    pair<status_code, value> result5 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + "WrongID",
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
+
+    //already signed in, sign in again with correct login
+    cout << "Edge SignOn 5" << endl;
+    pair<status_code, value> result6 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::OK, result6.first);
   
+    //already signed in, sign in again with wrong password
+    cout << "Edge SignOn 6" << endl;
+    pair<status_code, value> result7 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string("WrongPassword"))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result7.first);
   }
 
   TEST_FIXTURE(UserFixture, GetUser) {
@@ -1438,6 +1476,31 @@ SUITE(USER) {
     };
     CHECK_EQUAL(status_codes::BadRequest, param1.first);
 
+    //Adding friend already on friendslist
+    cout << "Edge AddFriend 3" << endl;
+    pair<status_code, value> result3 {
+      do_request(methods::PUT,
+        string(UserFixture::user_addr)
+        + add_friend + "/"
+        + userid + "/"
+        + part_country + "/"
+        + row_name)
+    };
+    CHECK_EQUAL(status_codes::OK, result3.first);
+
+    pair<status_code, value> get_friends2 {
+      do_request (methods::GET,
+                  string(UserFixture::user_addr)
+                  + read_friend_list + "/"
+                  + userid) //Gary
+    };
+    CHECK_EQUAL(status_codes::OK, get_friends2.first);
+    CHECK_EQUAL(string("{\"") + friends + "\":\""
+                + friends_val + "|"
+                + part_country + ";"
+                + row_name + "\"}",
+                get_friends2.second.serialize());
+
     /////////////////////////////////////////////////
 	  cout << ">> UnFriend Test" << endl;
 	
@@ -1499,8 +1562,7 @@ SUITE(USER) {
         string(UserFixture::user_addr)
         + unfriend)
     };
-    CHECK_EQUAL(status_codes::BadRequest, param2.first);
-	
+    CHECK_EQUAL(status_codes::BadRequest, param2.first);	
   }
   
   TEST_FIXTURE(UserFixture, StatusUpdate) {
@@ -1636,18 +1698,37 @@ SUITE(USER) {
 
     //userid not logged in
     cout << "Edge SignOff 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_off + "/"
                   + "Bleh")
     };
+    CHECK_EQUAL(status_codes::NotFound, result1.first);
+
+    //signout with valid id but no active session
+    cout << "Edge SignOff 2" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off + "/"
+                  + "userid")
+    };
     CHECK_EQUAL(status_codes::NotFound, result2.first);
+
+    //not enough parameters
+    cout << "Edge SignOff 3" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off)
+    };
+    CHECK_EQUAL(status_codes::NotFound, result3.first);
   }
 }
 
 //Checks for disallowed methods
-SUITE(USER_RAND) {
+SUITE(USER_DIS) {
   TEST_FIXTURE(UserFixture, rand) {
     pair<status_code, value> result {
       do_request (methods::DEL,
