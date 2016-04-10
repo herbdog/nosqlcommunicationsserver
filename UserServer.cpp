@@ -585,19 +585,29 @@ void handle_put(http_request message) {
                           + paths[2],
                           flist)
             };  
-            if (statusupdate.first != status_codes::OK) {
+            cout << "PushServer is up" << endl;
+            if (statusupdate.first != status_codes::OK && 
+                statusupdate.first != status_codes::ServiceUnavailable) {
               message.reply(status_codes::NotFound);
               return;
             }
-            
+            else if (statusupdate.first == status_codes::ServiceUnavailable) {
+              message.reply(status_codes::ServiceUnavailable);
+              return;
+            }
             message.reply(status_codes::OK);
-            return;
-            
+            return;          
           }
     		  catch (const web::uri_exception& e) {
+            cout << "PushServer is down" << endl;
     			  message.reply(status_codes::ServiceUnavailable);
     			  return;
     		  }
+          catch (...) {
+            cout << "PushServer is down" << endl;
+            message.reply(status_codes::ServiceUnavailable);
+            return;
+          }
     		}
   		  else {
            ++it;
