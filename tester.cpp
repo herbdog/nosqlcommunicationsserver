@@ -1469,7 +1469,7 @@ SUITE(USER) {
 
     //user is not logged in
     cout << "Edge AddFriend 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + add_friend + "/"
@@ -1477,22 +1477,22 @@ SUITE(USER) {
         + part_country + "/"
         + row_name)
     };
-    CHECK_EQUAL(status_codes::Forbidden, result2.first);
+    CHECK_EQUAL(status_codes::Forbidden, result1.first);
 
     //not enough params
     cout << "Edge AddFriend 2" << endl;
-    pair<status_code,value> param1 {
+    pair<status_code,value> result2 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + add_friend)
     };
-    CHECK_EQUAL(status_codes::BadRequest, param1.first);
+    CHECK_EQUAL(status_codes::BadRequest, result2.first);
 
     /////////////////////////////////////////////////
 	  cout << ">> UnFriend Test" << endl;
 	
 	  //Remove Bob Ross from Franklin's friends list
-      pair<status_code, value> result1 {
+      pair<status_code, value> result1_0 {
         do_request(methods::PUT,
           string(UserFixture::user_addr)
           + unfriend + "/"
@@ -1500,7 +1500,7 @@ SUITE(USER) {
           + part_country + "/"
           + row_name)
     };
-    CHECK_EQUAL(status_codes::OK, result1.first);
+    CHECK_EQUAL(status_codes::OK, result1_0.first);
 	
 	  pair<status_code, value> get_friends1 {
       do_request (methods::GET,
@@ -1515,8 +1515,8 @@ SUITE(USER) {
                 get_friends1.second.serialize());
 
     //user is not logged in
-    cout << "Edge UnFriend1" << endl;
-    pair<status_code, value> result1_2 {
+    cout << "Edge UnFriend 1" << endl;
+    pair<status_code, value> result1_1 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + unfriend + "/"
@@ -1524,7 +1524,7 @@ SUITE(USER) {
         + part_country + "/"
         + row_name)
     };
-	  CHECK_EQUAL(status_codes::Forbidden, result1_2.first);
+	  CHECK_EQUAL(status_codes::Forbidden, result1_1.first);
 	
 	  string part_country1 {"CN"};
     string row_name1 {"Nimoy,Leonard"};
@@ -1532,8 +1532,8 @@ SUITE(USER) {
     string uid1 = "Leonard";
 
 	  //unfriending someone not on their friends list
-	  cout << "Edge UnFriend2" << endl;
-	  pair<status_code, value> result1_3 {
+	  cout << "Edge UnFriend 2" << endl;
+	  pair<status_code, value> result1_2 {
 		  do_request(methods::PUT,
 		            string(UserFixture::user_addr)
 		            + unfriend + "/"
@@ -1541,16 +1541,16 @@ SUITE(USER) {
                 + part_country1 + "/"
                 + row_name1)
 	  };
-	  CHECK_EQUAL(status_codes::OK, result1_3.first);
+	  CHECK_EQUAL(status_codes::OK, result1_2.first);
 
     //not enough params
-    cout << "Edge UnFriend 2" << endl;
-    pair<status_code,value> param2 {
+    cout << "Edge UnFriend 3" << endl;
+    pair<status_code,value> result1_3 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + unfriend)
     };
-    CHECK_EQUAL(status_codes::BadRequest, param2.first);
+    CHECK_EQUAL(status_codes::BadRequest, result1_3.first);
 	
   }
   
