@@ -1635,13 +1635,32 @@ SUITE(USER) {
 
     //userid not logged in
     cout << "Edge SignOff 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_off + "/"
                   + "Bleh")
     };
+    CHECK_EQUAL(status_codes::NotFound, result1.first);
+
+    //signout with valid id but no active session
+    cout << "Edge SignOff 2" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off + "/"
+                  + "userid")
+    };
     CHECK_EQUAL(status_codes::NotFound, result2.first);
+
+    //not enough parameters
+    cout << "Edge SignOff 3" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off)
+    };
+    CHECK_EQUAL(status_codes::NotFound, result3.first);
   }
 }
 
