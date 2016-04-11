@@ -1374,35 +1374,6 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string(user_pwd))}))
     };
-<<<<<<< HEAD
-    CHECK_EQUAL(status_codes::BadRequest, result4.first);
-
-    //user does not exist
-    cout << "Edge SignOn 4" << endl;
-    pair<status_code, value> result5 {
-      do_request (methods::POST,
-                  string(UserFixture::user_addr)
-                  + sign_on + "/"
-                  + "WrongID",
-                  value::object (vector<pair<string,value>>
-                                   {make_pair("Password",
-                                              value::string(user_pwd))}))
-    };
-    CHECK_EQUAL(status_codes::NotFound, result5.first);
-
-    //already signed in, sign in again with correct login
-    cout << "Edge SignOn 5" << endl;
-    pair<status_code, value> result6 {
-      do_request (methods::POST,
-                  string(UserFixture::user_addr)
-                  + sign_on + "/"
-                  + userid,
-                  value::object (vector<pair<string,value>>
-                                   {make_pair("Password",
-                                              value::string(user_pwd))}))
-    };
-    CHECK_EQUAL(status_codes::OK, result6.first);
-=======
     CHECK_EQUAL(status_codes::BadRequest, result6.first);
 
     //not enough parameters
@@ -1414,11 +1385,10 @@ SUITE(USER) {
                   + userid)
     };
     CHECK_EQUAL(status_codes::NotFound, result7.first);
->>>>>>> public/master
   
     //already signed in, sign in again with wrong password
-    cout << "Edge SignOn 6" << endl;
-    pair<status_code, value> result7 {
+    cout << "Edge SignOn 8" << endl;
+    pair<status_code, value> result8 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
@@ -1427,7 +1397,7 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string("WrongPassword"))}))
     };
-    CHECK_EQUAL(status_codes::NotFound, result7.first);
+    CHECK_EQUAL(status_codes::NotFound, result8.first);
   }
 
   TEST_FIXTURE(UserFixture, GetUser) {
@@ -1617,12 +1587,8 @@ SUITE(USER) {
         string(UserFixture::user_addr)
         + unfriend)
     };
-<<<<<<< HEAD
-    CHECK_EQUAL(status_codes::BadRequest, param2.first);	
-=======
     CHECK_EQUAL(status_codes::BadRequest, result1_3.first);
 	
->>>>>>> public/master
   }
   
   TEST_FIXTURE(UserFixture, StatusUpdate) {
