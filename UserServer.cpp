@@ -445,7 +445,6 @@ void handle_put(http_request message) {
       message.reply(status_codes::Forbidden);
       return;
     }
-	
     return;
   }
   else if (paths[0] == un_friend) {
@@ -457,7 +456,7 @@ void handle_put(http_request message) {
 	  string rm_country = paths[2];
 	  string rm_name = paths[3];
 	
-	 //checks to see if userid has a session
+	  //checks to see if userid has a session
     if (session.size() > 0) {
       for (auto it = session.begin(); it != session.end();) {
         if (it->first == uid) {
@@ -583,19 +582,25 @@ void handle_put(http_request message) {
                           + paths[2],
                           flist)
             };  
-            if (statusupdate.first != status_codes::OK) {
+            cout << "PushServer is up" << endl;
+            if (statusupdate.first != status_codes::OK && 
+                statusupdate.first != status_codes::ServiceUnavailable) {
               message.reply(status_codes::NotFound);
               return;
             }
-            
             message.reply(status_codes::OK);
-            return;
-            
+            return;          
           }
     		  catch (const web::uri_exception& e) {
+            cout << "PushServer is down" << endl;
     			  message.reply(status_codes::ServiceUnavailable);
     			  return;
     		  }
+          catch (...) {
+            cout << "PushServer is down" << endl;
+            message.reply(status_codes::ServiceUnavailable);
+            return;
+          }
     		}
   		  else {
            ++it;
