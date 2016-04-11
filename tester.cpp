@@ -1284,21 +1284,22 @@ public:
 
 SUITE(USER) {
   TEST_FIXTURE(UserFixture, SignOn) {
+    //user does not exist
     cout << ">> SignOn Test" << endl;
-
     pair<status_code, value> result {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
-                  + userid,
+                  + "WrongID",
                   value::object (vector<pair<string,value>>
                                    {make_pair("Password",
                                               value::string(user_pwd))}))
-    };                                                     //Stu
+    };
+    CHECK_EQUAL(status_codes::NotFound, result.first);
 
-    //wrong password
+    //user exists, wrong password, not signed in
     cout << "Edge SignOn 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
@@ -1307,11 +1308,50 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string("WrongPassword"))}))
     };
-    CHECK_EQUAL(status_codes::NotFound, result2.first);
+    CHECK_EQUAL(status_codes::NotFound, result1.first);
+
+    //SIGNED IN
+    cout << "Edge SignOn 2" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::OK, result2.first);
+
+    //already signed in, sign in again with correct login
+    cout << "Edge SignOn 3" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string(user_pwd))}))
+    };
+    CHECK_EQUAL(status_codes::OK, result3.first);
+
+    //already signed in, sign in again with wrong password
+    cout << "Edge SignOn 4" << endl;
+    pair<status_code, value> result4 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid,
+                  value::object (vector<pair<string,value>>
+                                   {make_pair("Password",
+                                              value::string("WrongPassword"))}))
+    };
+    CHECK_EQUAL(status_codes::NotFound, result4.first);
 
     //Wrong property
-    cout << "Edge SignOn 2" << endl;
-    pair<status_code, value> result3 {
+    cout << "Edge SignOn 5" << endl;
+    pair<status_code, value> result5 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_on + "/"
@@ -1320,12 +1360,12 @@ SUITE(USER) {
                                    {make_pair("WrongProperty",
                                               value::string(user_pwd))}))
     };
-    CHECK_EQUAL(status_codes::NotFound, result3.first);
+    CHECK_EQUAL(status_codes::NotFound, result5.first);
 
     //Wrong operation
     //Also tests for SignOff
-    cout << "Edge SignOn 3" << endl;
-    pair<status_code, value> result4 {
+    cout << "Edge SignOn 6" << endl;
+    pair<status_code, value> result6 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + "sign_up" + "/"
@@ -1334,7 +1374,17 @@ SUITE(USER) {
                                    {make_pair("Password",
                                               value::string(user_pwd))}))
     };
-    CHECK_EQUAL(status_codes::BadRequest, result4.first);
+    CHECK_EQUAL(status_codes::BadRequest, result6.first);
+
+    //not enough parameters
+    cout << "Edge SignOn 7" << endl;
+    pair<status_code, value> result7 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_on + "/"
+                  + userid)
+    };
+    CHECK_EQUAL(status_codes::NotFound, result7.first);
   
   }
 
@@ -1419,7 +1469,7 @@ SUITE(USER) {
 
     //user is not logged in
     cout << "Edge AddFriend 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + add_friend + "/"
@@ -1427,22 +1477,22 @@ SUITE(USER) {
         + part_country + "/"
         + row_name)
     };
-    CHECK_EQUAL(status_codes::Forbidden, result2.first);
+    CHECK_EQUAL(status_codes::Forbidden, result1.first);
 
     //not enough params
     cout << "Edge AddFriend 2" << endl;
-    pair<status_code,value> param1 {
+    pair<status_code,value> result2 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + add_friend)
     };
-    CHECK_EQUAL(status_codes::BadRequest, param1.first);
+    CHECK_EQUAL(status_codes::BadRequest, result2.first);
 
     /////////////////////////////////////////////////
 	  cout << ">> UnFriend Test" << endl;
 	
 	  //Remove Bob Ross from Franklin's friends list
-      pair<status_code, value> result1 {
+      pair<status_code, value> result1_0 {
         do_request(methods::PUT,
           string(UserFixture::user_addr)
           + unfriend + "/"
@@ -1450,7 +1500,7 @@ SUITE(USER) {
           + part_country + "/"
           + row_name)
     };
-    CHECK_EQUAL(status_codes::OK, result1.first);
+    CHECK_EQUAL(status_codes::OK, result1_0.first);
 	
 	  pair<status_code, value> get_friends1 {
       do_request (methods::GET,
@@ -1465,8 +1515,8 @@ SUITE(USER) {
                 get_friends1.second.serialize());
 
     //user is not logged in
-    cout << "Edge UnFriend1" << endl;
-    pair<status_code, value> result1_2 {
+    cout << "Edge UnFriend 1" << endl;
+    pair<status_code, value> result1_1 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + unfriend + "/"
@@ -1474,7 +1524,7 @@ SUITE(USER) {
         + part_country + "/"
         + row_name)
     };
-	  CHECK_EQUAL(status_codes::Forbidden, result1_2.first);
+	  CHECK_EQUAL(status_codes::Forbidden, result1_1.first);
 	
 	  string part_country1 {"CN"};
     string row_name1 {"Nimoy,Leonard"};
@@ -1482,8 +1532,8 @@ SUITE(USER) {
     string uid1 = "Leonard";
 
 	  //unfriending someone not on their friends list
-	  cout << "Edge UnFriend2" << endl;
-	  pair<status_code, value> result1_3 {
+	  cout << "Edge UnFriend 2" << endl;
+	  pair<status_code, value> result1_2 {
 		  do_request(methods::PUT,
 		            string(UserFixture::user_addr)
 		            + unfriend + "/"
@@ -1491,16 +1541,16 @@ SUITE(USER) {
                 + part_country1 + "/"
                 + row_name1)
 	  };
-	  CHECK_EQUAL(status_codes::OK, result1_3.first);
+	  CHECK_EQUAL(status_codes::OK, result1_2.first);
 
     //not enough params
-    cout << "Edge UnFriend 2" << endl;
-    pair<status_code,value> param2 {
+    cout << "Edge UnFriend 3" << endl;
+    pair<status_code,value> result1_3 {
       do_request(methods::PUT,
         string(UserFixture::user_addr)
         + unfriend)
     };
-    CHECK_EQUAL(status_codes::BadRequest, param2.first);
+    CHECK_EQUAL(status_codes::BadRequest, result1_3.first);
 	
   }
   
@@ -1635,13 +1685,32 @@ SUITE(USER) {
 
     //userid not logged in
     cout << "Edge SignOff 1" << endl;
-    pair<status_code, value> result2 {
+    pair<status_code, value> result1 {
       do_request (methods::POST,
                   string(UserFixture::user_addr)
                   + sign_off + "/"
                   + "Bleh")
     };
+    CHECK_EQUAL(status_codes::NotFound, result1.first);
+
+    //signout with valid id but no active session
+    cout << "Edge SignOff 2" << endl;
+    pair<status_code, value> result2 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off + "/"
+                  + "userid")
+    };
     CHECK_EQUAL(status_codes::NotFound, result2.first);
+
+    //not enough parameters
+    cout << "Edge SignOff 3" << endl;
+    pair<status_code, value> result3 {
+      do_request (methods::POST,
+                  string(UserFixture::user_addr)
+                  + sign_off)
+    };
+    CHECK_EQUAL(status_codes::NotFound, result3.first);
   }
 }
 
