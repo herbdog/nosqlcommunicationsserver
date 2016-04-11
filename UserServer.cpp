@@ -445,7 +445,6 @@ void handle_put(http_request message) {
       message.reply(status_codes::Forbidden);
       return;
     }
-	
     return;
   }
   else if (paths[0] == un_friend) {
@@ -454,11 +453,10 @@ void handle_put(http_request message) {
       message.reply(status_codes::BadRequest);
       return;
     }
-	
 	  string rm_country = paths[2];
 	  string rm_name = paths[3];
 	
-	  //checks to see if userid has a session
+	 //checks to see if userid has a session
     if (session.size() > 0) {
       for (auto it = session.begin(); it != session.end();) {
         if (it->first == uid) {
