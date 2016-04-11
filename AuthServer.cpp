@@ -208,8 +208,6 @@ void handle_get(http_request message) {
     return;
   }
 
-  cout << values.size() << endl;
-
 
   cloud_table table2 {table_cache.lookup_table(data_table_name)};  
   if ( ! table2.exists()) {
